@@ -130,9 +130,15 @@ html.lenis, html.lenis body { height: auto; }
 }
 .files svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 3px 4px rgba(0,0,0,.5)); }
 
+/* Idle life: slow breathing and a slight weight shift, independent of scrolling */
+.breath { transform-origin: 79% 96%; animation: breathe 3.8s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.004, 1.009) rotate(.25deg); } }
+.sitter { transform-origin: 50% 59%; animation: breathe-sit 4.4s ease-in-out infinite; }
+@keyframes breathe-sit { 50% { transform: scale(1.005, 1.01) rotate(-.35deg); } }
+
 /* The seated character's lower edge is cut by the desk; --sf softens it while he falls */
+.sitter-rig { --sf: 0%; }
 .sitter {
-  --sf: 0%;
   -webkit-mask-image: linear-gradient(#000 calc(59.4% - var(--sf)), transparent 59.4%);
           mask-image: linear-gradient(#000 calc(59.4% - var(--sf)), transparent 59.4%);
 }
@@ -145,7 +151,9 @@ html.lenis, html.lenis body { height: auto; }
   width: var(--fw); aspect-ratio: 675 / 565;
   left: calc(50% - var(--fw) / 2); top: 21%;
 }
-.craft { position: absolute; inset: 0; will-change: transform, opacity; }
+.craft, .cloudset, .bobber { position: absolute; inset: 0; will-change: transform, opacity; }
+.bobber { animation: bob-plane 2.6s ease-in-out infinite; }
+@keyframes bob-plane { 50% { transform: translateY(-2.5%) rotate(-1.2deg); } }
 .cloud, .plane, .pilot { position: absolute; will-change: transform, opacity; }
 /* pilot box inside the flight frame (plane.webp 254,4 224×237, plane at 1,91) */
 .pilot {
@@ -360,6 +368,6 @@ html.lenis, html.lenis body { height: auto; }
 
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .grain, .float, .prop i { animation: none !important; }
+  .grain, .float, .prop i, .breath, .sitter, .bobber { animation: none !important; }
   .badge { transition: none; }
 }

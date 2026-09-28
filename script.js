@@ -1,14 +1,21 @@
 /* =========================================================
    Nisham Sajjad — scroll-story
-   One pinned viewport + one scroll-scrubbed GSAP timeline.
-   Timeline units are "beats"; each beat = 0.75 viewport of scroll.
 
-   Scene map (beat → what happens)
+   Two timelines:
+   1. `tl`  (scroll-scrubbed) — scenes, backgrounds, camera framing, text.
+            Units are "beats"; each beat = 0.75 viewport of scroll.
+   2. `act` (time-based)      — the character's acting: walking, putting the
+            mask on, catching the file, jumping out of the plane. When the
+            scroll reaches a scene, `act` plays to that scene's label at
+            natural speed (and back again when scrolling up), so his
+            movement flows freely instead of stuttering with the finger.
+
+   Scene map (scroll beat → what happens)
      0.0  S1  Intro                 "I am Nisham Sajjad,"
      0.1  S2  Portrait + experience
-     1.7  S3  Mission Hospital      turns away, walks into the hospital, turns back
+     1.75 S3  Mission Hospital      turns away, walks into the hospital, turns back
      3.7  S4  COVID mask            pulls the mask from his pocket onto his face
-     5.1  S5  NABH                  catches the files, "(NABH)" letter reveal + shine
+     5.1  S5  NABH                  catches the file, "(NABH)" reveal + shine
      7.1  S6  Flight to Maldives
      8.95 S7  NURF Pharmacy, IGMH   jumps out of the plane, falls into his chair
     11.6  S8  Responsibilities      chair swivel + ticker
@@ -79,22 +86,30 @@
   const items = $$('.ticker li');
 
   const setA = $('.set-a');
-  const setB = $('.set-b');
   const bgHosp = $('.bg-hosp');
   const bgBlur = $('.bg-blur');
   const word = $('.nabh-word');
   const shine = $('.sign-glow span');
-  const stand = $('.ch-stand');
+
+  const hero = $('.hero');              // acting: walk scale / bob / sway / turn
+  const poseStand = $('.pose-stand');
+  const legL = $('.leg-l');
+  const legR = $('.leg-r');
+  const upper = $('.hero-upper');
   const masked = $('.ch-mask');
   const clip = $('.ch-clip');
   const maskItem = $('.mask-item');
   const files = $('.files');
-  const igmh = $('.bg-igmh');
+
+  const cam = $('.cam');
   const chair = $('.chair');
+  const sitterRig = $('.sitter-rig');
   const sitter = $('.sitter');
+  const portraitWrap = $('.portrait-wrap');
   const portrait = $('.portrait');
 
   const flight = $('.flight');
+  const cloudset = $('.cloudset');
   const craft = $('.craft');
   const plane = $('.plane');
   const pilot = $('.pilot');
@@ -121,19 +136,25 @@
   gsap.set(lines(mald), { y: 60 * M });
   gsap.set($$('.rule'), { scaleX: 0 });
 
-  gsap.set([bgHosp, bgBlur, stand, masked, clip, igmh, portrait, ambA, ambB, fx, shade], { opacity: 0 });
+  gsap.set([bgHosp, bgBlur, portraitWrap, ambA, ambB, fx, shade], { opacity: 0 });
   gsap.set(word, { clipPath: 'inset(0% 100% 0% 0%)' });
-  gsap.set(portrait, { xPercent: 25 * M, scale: 1 + 0.08 * M, transformOrigin: '86% 57%' });   // face centre
-  // Walk-back pivot: chosen so that at scale 2.2 his head sits where the
-  // portrait's head was, and at scale 1 he stands on his mark.
-  gsap.set(stand, { transformOrigin: '69% 54.6%', scaleX: RM ? 1 : 0.09, scaleY: 1 + 1.2 * M });
-  if (!RM) gsap.set(stand, { filter: 'brightness(0.06) drop-shadow(0 0 2px rgba(255,255,255,.6))' }); // from behind: rim-lit silhouette
-  gsap.set([masked, clip], { transformOrigin: '79% 96%' });   // feet
+  gsap.set(portraitWrap, { xPercent: 25 * M, scale: 1 + 0.08 * M, transformOrigin: '86% 57%' });
+  gsap.set(portrait, { transformOrigin: '86% 57%' });                       // face centre
+  // Walk-back pivot: at scale 2.2 his head sits where the portrait's head
+  // was; at scale 1 he stands on his mark.
+  gsap.set(hero, { opacity: 0, transformOrigin: '69% 54.6%', scaleX: RM ? 1 : 0.09, scaleY: 1 + 1.2 * M });
+  if (!RM) gsap.set(hero, { filter: 'brightness(0.06) drop-shadow(0 0 2px rgba(255,255,255,.6))' });
+  gsap.set(legL, { transformOrigin: '70.67% 77.15%' });                     // hips (665,1290)
+  gsap.set(legR, { transformOrigin: '79.17% 77.15%' });                     //      (745,1290)
+  gsap.set(upper, { transformOrigin: '75% 78%' });                          // waist
+  gsap.set([masked, clip], { opacity: 0 });
   gsap.set(maskItem, { opacity: 0, xPercent: 70 * M, yPercent: 390 * M, rotation: 40 * M, scale: 1 - 0.3 * M });
+  gsap.set(files, { opacity: 0 });
   gsap.set(setA, { transformOrigin: '75% 60%' });
-  gsap.set(setB, { opacity: 0 });
-  gsap.set([chair, sitter], { transformOrigin: '50% 59%', transformPerspective: 900 });
-  gsap.set(sitter, { opacity: 0, '--sf': RM ? '0%' : '9%' });
+  gsap.set(cam, { yPercent: 100 });                                        // IGMH waits below
+  gsap.set([chair, sitterRig], { transformOrigin: '50% 59%', transformPerspective: 900 });
+  gsap.set(sitterRig, { opacity: 0 });
+  gsap.set(sitter, { '--sf': RM ? '0%' : '9%' });
   gsap.set(pilot, { transformOrigin: '33% 100%' });
   gsap.set(ticker, { opacity: 0, y: 20 * M });
   gsap.set(items, { opacity: 0.25 });
@@ -141,7 +162,151 @@
   gsap.set([avatar, ...icons], { opacity: 0, scale: 0 });
   gsap.set([label, foot], { opacity: 0 });
 
-  /* ---------- Helpers ---------- */
+  /* =========================================================
+     ACTING — the character's own, time-based performance
+     ========================================================= */
+  const act = gsap.timeline({ paused: true, defaults: { ease: 'power2.out' } });
+
+  // falling pilot → seated character hand-over: line their heads up
+  const drop = () => (G.desk ? 20 : 33);   // sitter appears this far above the chair (% of stage)
+  function handover() {
+    const pw = pilot.offsetWidth, ph = pilot.offsetHeight;
+    const ox = flight.offsetLeft + pilot.offsetLeft + pw * 0.33;   // pilot transform origin
+    const oy = flight.offsetTop + pilot.offsetTop + ph;
+    const k = (G.w * 95 / 941) / (pw * 0.45);                        // head-size ratio
+    const headX = G.B.x + G.w * 0.494;
+    const headTop = G.B.y + G.h * (0.411 - drop() / 100);
+    return { x: headX - ox, y: headTop - oy + k * ph, k };
+  }
+
+  act.addLabel('start', 0);
+
+  /* --- S3 · turns away, walks into the hospital, turns back --- */
+  if (RM) {
+    act.to(portrait, { opacity: 0, duration: 0.3 }, 0);
+    act.to(hero, { opacity: 1, duration: 0.3 }, 0.3);
+  } else {
+    // turns his back to us: the close-up squashes edge-on and falls into shadow
+    act.to(portrait, { scaleX: 0.04, xPercent: -2, filter: 'brightness(0.3)', duration: 0.35, ease: 'power2.in' }, 0);
+    act.set(portrait, { opacity: 0 }, 0.35);
+    act.set(hero, { opacity: 1 }, 0.35);
+    act.to(hero, { scaleX: 2.2, duration: 0.25, ease: 'power2.out' }, 0.35);
+
+    // walks away: perspective shrink (fast near camera, slower far away)
+    const W0 = 0.6, STEP = 0.46, STEPS = 4;
+    act.to(hero, { scaleX: 1, scaleY: 1, duration: STEP * STEPS, ease: 'power1.out' }, W0);
+    for (let i = 0; i < STEPS; i++) {
+      const t = W0 + i * STEP;
+      const lead = i % 2 ? legR : legL;       // leg swinging forward
+      const back = i % 2 ? legL : legR;
+      const s = i % 2 ? -1 : 1;
+      act.to(lead, { rotation: 9 * s, duration: STEP, ease: 'sine.inOut' }, t);
+      act.to(back, { rotation: -7 * s, duration: STEP, ease: 'sine.inOut' }, t);
+      // the swinging leg lifts and bends a little mid-stride
+      act.to(lead, { yPercent: -0.9, scaleY: 0.965, duration: STEP / 2, yoyo: true, repeat: 1, ease: 'sine.out' }, t);
+      // body rises over the planted leg, dips at each footfall; weight shifts side to side
+      act.to(hero, { yPercent: -0.8, duration: STEP / 2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, t);
+      act.to(hero, { rotation: 1.1 * s, duration: STEP, ease: 'sine.inOut' }, t);
+      act.to(upper, { rotation: -0.9 * s, duration: STEP, ease: 'sine.inOut' }, t);   // shoulders counter-swing
+    }
+    const stop = W0 + STEP * STEPS;
+    act.to([legL, legR, hero, upper], { rotation: 0, duration: 0.3, ease: 'sine.out' }, stop);
+
+    // turns round to face us and steps into the light
+    act.to(hero, { scaleX: 0.05, duration: 0.14, ease: 'power2.in' }, stop + 0.25);
+    act.set(hero, { filter: 'none' }, stop + 0.39);
+    act.to(hero, { scaleX: 1, duration: 0.24, ease: 'back.out(1.8)' }, stop + 0.39);
+    act.to(hero, { yPercent: 0.4, duration: 0.12, yoyo: true, repeat: 1, ease: 'sine.inOut' }, stop + 0.6);
+    act.to(legL, { rotation: -3, duration: 0.2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, stop + 0.62); // shifts his stance
+  }
+  act.addLabel('hosp', '+=0.15');
+
+  /* --- S4 · takes the mask out of his pocket and puts it on --- */
+  act.to(upper, { rotation: 2.2 * M, duration: 0.3, ease: 'power2.out' }, 'hosp');          // leans to the pocket
+  act.to(maskItem, { opacity: 1, duration: 0.1 }, 'hosp+=0.18');
+  act.to(maskItem, { xPercent: 0, rotation: 0, scale: 1, duration: 0.6, ease: 'power1.inOut' }, 'hosp+=0.25');
+  act.to(maskItem, { yPercent: 0, duration: 0.6, ease: 'back.out(1.2)' }, 'hosp+=0.25');
+  act.to(upper, { rotation: -1.2 * M, duration: 0.35, ease: 'sine.inOut' }, 'hosp+=0.35');    // straightens, chin up
+  act.to(masked, { opacity: 1, duration: 0.1 }, 'hosp+=0.84');
+  act.to(maskItem, { opacity: 0, duration: 0.1 }, 'hosp+=0.9');
+  act.set(poseStand, { opacity: 0 }, 'hosp+=0.95');
+  act.to(upper, { rotation: 0, duration: 0.2 }, 'hosp+=0.95');
+  act.to(hero, { yPercent: 0.35 * M, duration: 0.13, yoyo: true, repeat: 1, ease: 'sine.inOut' }, 'hosp+=0.9'); // nod
+  act.addLabel('mask', 'hosp+=1.35');
+
+  /* --- S5 · a file is tossed in; he catches it --- */
+  act.set(files, { opacity: 1 }, 'mask');
+  act.fromTo(files,
+    { x: () => (G.vw - G.A.x) - G.w * 0.834 + 20, rotation: -240 * M },
+    { x: 0, rotation: 16, duration: 0.75, ease: 'none' }, 'mask');
+  // thrown up, then gravity brings it down into his hand
+  act.fromTo(files, { y: () => -G.h * 0.05 * M }, { y: () => -G.h * 0.14 * M, duration: 0.3, ease: 'power2.out' }, 'mask');
+  act.to(files, { y: 0, duration: 0.45, ease: 'power2.in' }, 'mask+=0.3');
+  act.to(hero, { xPercent: 0.7 * M, rotation: 0.8 * M, duration: 0.08, ease: 'power1.out' }, 'mask+=0.73'); // catch recoil
+  act.to(hero, { xPercent: 0, rotation: 0, duration: 0.3, ease: 'power2.out' }, 'mask+=0.81');
+  act.to(clip, { opacity: 1, duration: 0.15 }, 'mask+=0.74');
+  act.set([masked, files], { opacity: 0 }, 'mask+=0.9');
+  act.addLabel('files', 'mask+=1.2');
+
+  /* --- S7 · jumps out of the plane and falls into his chair --- */
+  const J = 'files';
+  // anticipation: crouches into the seat
+  act.to(pilot, { yPercent: 10 * M, scaleY: 1 - 0.12 * M, scaleX: 1 + 0.06 * M, duration: 0.22, ease: 'power2.in' }, J);
+  // take-off: stretches up and out; the plane flies on without him
+  act.to(pilot, {
+    yPercent: () => (G.desk ? -55 : -85) * M, scaleY: 1 + 0.1 * M, scaleX: 1 - 0.05 * M, rotation: -12 * M,
+    '--pf': RM ? '100%' : '72%', duration: 0.38, ease: 'power2.out',
+  }, `${J}+=0.22`);
+  act.to(plane, { xPercent: 180 * M, yPercent: -120 * M, rotation: -14 * M, duration: 1.0, ease: 'power2.in' }, `${J}+=0.25`);
+  act.to(plane, { opacity: 0, duration: 0.2 }, `${J}+=1.1`);
+  // the camera follows him down: clouds rush up, IGMH rises into view
+  act.to(cloudset, { yPercent: -260 * M, opacity: 0, duration: 0.9, ease: 'power1.in' }, `${J}+=0.4`);
+  act.to(cam, { yPercent: 0, duration: 1.0, ease: 'power2.out' }, `${J}+=0.45`);
+  // apex, then gravity: accelerates down, tipping forward as he drops toward the chair
+  act.to(pilot, {
+    x: () => handover().x * M, y: () => handover().y * M, yPercent: 0,
+    scale: () => (RM ? 1 : handover().k), rotation: 14 * M,
+    duration: 0.75, ease: 'power2.in',
+  }, `${J}+=0.62`);
+  act.to(pilot, { rotation: 4 * M, duration: 0.2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, `${J}+=0.8`); // arms flail
+  // hand-over to the seated figure, still falling behind the desk
+  act.to(sitterRig, { opacity: 1, duration: 0.08 }, `${J}+=1.3`);
+  act.to(pilot, { opacity: 0, duration: 0.1 }, `${J}+=1.34`);
+  act.fromTo(sitterRig, { yPercent: () => -drop() * M }, { yPercent: 0, duration: 0.36, ease: 'power2.in' }, `${J}+=1.3`);
+  act.to(sitter, { '--sf': '0%', duration: 0.36, ease: 'power2.in' }, `${J}+=1.3`);
+  // landing: squash, the chair takes his weight and rocks, rebound, settle back
+  const L = 1.66;
+  act.to(sitterRig, { scaleY: 1 - 0.07 * M, scaleX: 1 + 0.035 * M, duration: 0.07, ease: 'power1.out' }, `${J}+=${L}`);
+  act.to(sitterRig, { scaleY: 1, scaleX: 1, yPercent: -1.6 * M, duration: 0.15, ease: 'power2.out' }, `${J}+=${L + 0.07}`);
+  act.to(sitterRig, { yPercent: 0, duration: 0.15, ease: 'power2.in' }, `${J}+=${L + 0.22}`);
+  act.to(chair, { yPercent: 0.7 * M, rotation: -1.2 * M, duration: 0.07, ease: 'power1.out' }, `${J}+=${L}`);
+  act.to(chair, { yPercent: 0, rotation: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)' }, `${J}+=${L + 0.07}`);
+  act.to(sitterRig, { rotation: -1.4 * M, duration: 0.3, ease: 'sine.out' }, `${J}+=${L + 0.4}`);        // leans back
+  act.to(sitterRig, { rotation: 0, duration: 0.5, ease: 'sine.inOut' }, `${J}+=${L + 0.7}`);
+  act.addLabel('desk', `${J}+=${L + 1.25}`);
+
+  // scroll beat at which each acting label is reached
+  const CUES = [[1.75, 'hosp'], [3.7, 'mask'], [5.1, 'files'], [8.95, 'desk']];
+  let cue = 'start';
+  let playing = null;
+  function direct(t) {
+    let want = 'start';
+    for (const [at, name] of CUES) if (t >= at) want = name;
+    if (want === cue) return;
+    cue = want;
+    const to = act.labels[want];
+    if (RM) { act.seek(to); return; }
+    const dist = Math.abs(to - act.time());
+    const back = to < act.time();
+    if (playing) playing.kill();
+    // natural speed; faster when rewinding or skipping several scenes
+    const dur = Math.min(dist, 3.2) / (back ? 1.8 : 1);
+    playing = act.tweenTo(to, { duration: dur, ease: 'none' });
+  }
+
+  /* =========================================================
+     SCROLL — scenes, framing and copy
+     ========================================================= */
   const tl = gsap.timeline({ defaults: { ease: 'power2.out', duration: 0.5 } });
 
   // fade + slide up + blur-to-sharp, line by line
@@ -153,81 +318,27 @@
   const drawRule = (el, at) => tl.to(el, { scaleX: 1, duration: 0.35, ease: 'power2.inOut' }, at);
   const stageAt = (key) => ({ x: () => G[key].x, y: () => G[key].y });
 
-  // Where the falling pilot must be (and how big) to hand over to the seated
-  // character: his head lines up with the sitter's head at the crossfade.
-  const drop = () => (G.desk ? 20 : 33);   // how far above the chair the sitter appears (% of stage)
-  function handover() {
-    const pw = pilot.offsetWidth, ph = pilot.offsetHeight;
-    const ox = flight.offsetLeft + pilot.offsetLeft + pw * 0.33;       // transform origin
-    const oy = flight.offsetTop + pilot.offsetTop + ph;
-    const k = (G.w * 95 / 941) / (pw * 0.45);                            // head width ratio
-    const headX = G.B.x + G.w * 0.494;
-    const headTop = G.B.y + G.h * (0.411 - drop() / 100);                // sitter at its drop height
-    return { x: headX - ox, y: headTop - oy + k * ph, k };
-  }
-
-  /* ===================== S1 · Intro ===================== */
+  /* S1 · Intro */
   tl.fromTo(stage, stageAt('A'), { ...stageAt('A'), duration: 0.001 }, 0);
 
-  /* ============ S2 · Portrait + experience ============== */
+  /* S2 · Portrait + experience */
   tl.to($('.intro-h'), { y: () => -G.vh * (G.desk ? 0.03 : 0.065) * M, duration: 0.8, ease: 'power2.inOut' }, 0.1);
-  tl.to(portrait, { opacity: 1, xPercent: 0, scale: 1, duration: 1, ease: 'power3.out' }, 0.2);
+  tl.to(portraitWrap, { opacity: 1, xPercent: 0, scale: 1, duration: 1, ease: 'power3.out' }, 0.2);
   reveal(lines($('.b', intro)), 0.7);
   drawRule($('.rule', intro), 1.15);
 
-  /* ============ S3 · Turns, walks into the hospital, turns back == */
+  /* S3 · Mission Hospital */
   tl.to(intro, { opacity: 0, y: -40 * M, duration: 0.4, ease: 'power2.in' }, 1.7);
-  if (RM) {
-    tl.to(portrait, { opacity: 0, duration: 0.3 }, 1.8);
-    tl.to(stand, { opacity: 1, duration: 0.4 }, 2.1);
-  } else {
-    // 1 · he turns away (portrait squashes edge-on and falls into shadow)
-    tl.to(portrait, { scaleX: 0.04, xPercent: -2, filter: 'brightness(0.3)', duration: 0.3, ease: 'power2.in' }, 1.75);
-    tl.set(portrait, { opacity: 0 }, 2.05);
-    // …and completes the turn: we now see his back, close to camera
-    tl.set(stand, { opacity: 1 }, 2.05);
-    tl.to(stand, { scaleX: 2.2, duration: 0.2, ease: 'power2.out' }, 2.05);
-    // 2 · walks away into the scene: shrinks toward his mark with a step bob + sway
-    tl.to(stand, { scaleX: 1, scaleY: 1, duration: 0.85, ease: 'power1.inOut' }, 2.25);
-    tl.to(stand, { yPercent: -0.8, duration: 0.07, yoyo: true, repeat: 11, ease: 'sine.out' }, 2.25);
-    tl.to(stand, { rotation: 1.2, duration: 0.14, yoyo: true, repeat: 5, ease: 'sine.inOut' }, 2.25);
-    // 3 · turns round to face us and steps into the light
-    tl.to(stand, { scaleX: 0.05, duration: 0.1, ease: 'power2.in' }, 3.12);
-    tl.set(stand, { filter: 'none' }, 3.22);
-    tl.to(stand, { scaleX: 1, duration: 0.16, ease: 'back.out(2)' }, 3.22);
-    tl.to(stand, { yPercent: 0.35, duration: 0.08, yoyo: true, repeat: 1, ease: 'sine.inOut' }, 3.38);
-  }
-  tl.fromTo(bgHosp, { scale: 1 + 0.1 * M }, { scale: 1, duration: 1.1 }, 2.1);
-  tl.to(bgHosp, { opacity: 1, duration: 0.9 }, 2.1);
-  tl.to([fx, ambA, shade], { opacity: 1, duration: 0.8 }, 2.1);
-  reveal(lines($('.h', journey)), 3.2);
+  tl.fromTo(bgHosp, { scale: 1 + 0.1 * M }, { scale: 1, duration: 1.1 }, 1.9);
+  tl.to(bgHosp, { opacity: 1, duration: 0.9 }, 1.9);
+  tl.to([fx, ambA, shade], { opacity: 1, duration: 0.8 }, 1.9);
+  reveal(lines($('.h', journey)), 3.0);
 
-  /* ============ S4 · Puts the mask on ================== */
-  // leans into the pocket, pulls the mask out and up onto his face
-  tl.to(stand, { rotation: -1.4 * M, duration: 0.15, ease: 'power1.out' }, 3.7);
-  tl.to(maskItem, { opacity: 1, duration: 0.08 }, 3.8);
-  tl.to(maskItem, { xPercent: 0, rotation: 0, scale: 1, duration: 0.45, ease: 'power1.inOut' }, 3.85);
-  tl.to(maskItem, { yPercent: 0, duration: 0.45, ease: 'back.out(1.3)' }, 3.85);
-  tl.to(stand, { rotation: 0, duration: 0.25, ease: 'power1.inOut' }, 4.0);
-  // mask pressed on: swap to the masked pose, small nod
-  tl.to(masked, { opacity: 1, duration: 0.06 }, 4.28);
-  tl.to(maskItem, { opacity: 0, duration: 0.06 }, 4.32);
-  tl.set(stand, { opacity: 0 }, 4.34);
-  tl.to(masked, { yPercent: 0.3 * M, duration: 0.08, yoyo: true, repeat: 1, ease: 'sine.inOut' }, 4.32);
-  reveal(lines($('.covid', journey)), 4.4);
-  drawRule($('.rule', journey), 4.85);
+  /* S4 · COVID */
+  reveal(lines($('.covid', journey)), 4.2);
+  drawRule($('.rule', journey), 4.65);
 
-  /* ============ S5 · Catches the files · NABH =========== */
-  // the file is tossed in from the right on an arc…
-  tl.fromTo(files,
-    { opacity: RM ? 0 : 1, x: () => (G.vw - G.A.x) - G.w * 0.834 + 20, rotation: -220 * M },
-    { opacity: 1, x: 0, rotation: 16, duration: 0.5, ease: 'power1.out' }, 5.15);
-  tl.fromTo(files, { y: () => -G.h * 0.12 * M }, { y: 0, duration: 0.5, ease: 'power2.in' }, 5.15);
-  // …he catches it: small recoil, then the page-5 pose with the clipboard
-  tl.to(masked, { xPercent: 0.7 * M, rotation: 0.8 * M, duration: 0.06, ease: 'power1.out' }, 5.64);
-  tl.to(masked, { xPercent: 0, rotation: 0, duration: 0.18, ease: 'power2.out' }, 5.7);
-  tl.to(clip, { opacity: 1, duration: 0.14 }, 5.72);
-  tl.set([masked, files], { opacity: 0 }, 5.86);
+  /* S5 · NABH */
   tl.to(bgBlur, { opacity: 1, duration: 0.6 }, 5.2);
   tl.to(journey, { y: () => (G.desk ? 0 : -G.vh * 0.05), duration: 0.6, ease: 'power2.inOut' }, 5.2);
   // "(NABH)" appears one character at a time (6 glyphs → 6 steps)
@@ -235,80 +346,46 @@
   reveal(lines($('.nabh', journey)), 6.2);
   tl.fromTo(shine, { xPercent: -120 }, { xPercent: 380, duration: 0.7, ease: 'power1.inOut' }, 6.45);
 
-  /* ============ S6 · Flight to the Maldives ============= */
+  /* S6 · Flight to the Maldives */
   tl.to(setA, { opacity: 0, scale: 1 + 0.06 * M, duration: 0.6, ease: 'power2.in' }, 7.1);
   tl.to(journey, { opacity: 0, duration: 0.5, ease: 'power2.in' }, 7.1);
   tl.to([fx, ambA, shade], { opacity: 0, duration: 0.5 }, 7.1);
-
+  tl.fromTo(stage, stageAt('A'), { ...stageAt('B'), duration: 0.1, immediateRender: false }, 7.7);
   tl.fromTo(craft,
     { opacity: 0, xPercent: -200 * M, yPercent: 30 * M, rotation: 10 * M },
     { opacity: 1, xPercent: 0, yPercent: 0, rotation: 0, duration: 1, ease: 'power3.out' }, 7.5);
   tl.fromTo(c1, { opacity: 0, xPercent: 200 * M }, { opacity: 1, xPercent: 0, duration: 1.1 }, 7.45);
   tl.fromTo(c2, { opacity: 0, xPercent: 320 * M }, { opacity: 1, xPercent: 0, duration: 1.2 }, 7.5);
   tl.fromTo(c3, { opacity: 0, xPercent: 380 * M }, { opacity: 1, xPercent: 0, duration: 1.3 }, 7.55);
-  reveal(lines(mald), 8.1, { ease: 'power3.out' }); // rises from further down (see initial states)
-  tl.to(craft, { yPercent: -4 * M, rotation: -2 * M, duration: 0.25, yoyo: true, repeat: 1, ease: 'sine.inOut' }, 8.45);
-  tl.to(mald, { opacity: 0, y: -30 * M, duration: 0.35, ease: 'power2.in' }, 8.95);
+  reveal(lines(mald), 7.95, { ease: 'power3.out' }); // rises from further down (see initial states)
+  tl.to(mald, { opacity: 0, y: -30 * M, duration: 0.3, ease: 'power2.in' }, 8.6);
 
-  /* ============ S7 · Jumps out, falls into the chair at IGMH ==== */
-  // anticipation: crouches in the seat
-  tl.to(pilot, { yPercent: 10 * M, scaleY: 1 - 0.12 * M, scaleX: 1 + 0.06 * M, duration: 0.12, ease: 'power2.in' }, 8.95);
-  // launch: stretches up and out, the plane flies on without him
-  tl.to(pilot, {
-    yPercent: () => (G.desk ? -55 : -85) * M, scaleY: 1 + 0.12 * M, scaleX: 1 - 0.06 * M, rotation: -12 * M, '--pf': RM ? '100%' : '72%',
-    duration: 0.3, ease: 'power2.out',
-  }, 9.07);
-  tl.to(plane, { xPercent: 180 * M, yPercent: -120 * M, rotation: -14 * M, duration: 0.8, ease: 'power2.in' }, 9.1);
-  tl.to(plane, { opacity: 0, duration: 0.2 }, 9.7);
-  tl.to([c1, c2, c3], { yPercent: -600 * M, opacity: 0, duration: 0.8, ease: 'power1.in', stagger: 0.04 }, 9.2);
-  // apex → gravity: falls, arms flailing, drifting over the chair
-  tl.to(pilot, {
-    x: () => handover().x * M, y: () => handover().y * M, yPercent: 0,
-    scale: () => (RM ? 1 : handover().k), rotation: 10 * M,
-    duration: 0.55, ease: 'power2.in',
-  }, 9.37);
-  tl.to(pilot, { rotation: -6 * M, duration: 0.18, yoyo: true, repeat: 1, ease: 'sine.inOut' }, 9.45);
-  // the camera drops with him: IGMH rises into view
-  tl.fromTo(stage, { x: () => G.B.x, y: () => G.B.y + G.vh * M }, { ...stageAt('B'), duration: 0.7, ease: 'power2.out', immediateRender: false }, 9.3);
-  tl.set(setB, { opacity: 1 }, 9.3);
-  tl.to(igmh, { opacity: 1, duration: 0.5 }, 9.3);
-  tl.to([ambB, shade], { opacity: 1, duration: 0.8 }, 9.3);
-  // hand-over to the seated figure, still falling behind the desk
-  tl.fromTo(sitter, { yPercent: () => -drop() * M }, { yPercent: 0, '--sf': '0%', duration: 0.3, ease: 'power2.in', immediateRender: false }, 9.88);
-  tl.to(sitter, { opacity: 1, duration: 0.06 }, 9.88);
-  tl.to(pilot, { opacity: 0, duration: 0.08 }, 9.9);
-  // landing: squash, chair takes the weight and rocks, small rebound, settles back
-  tl.to(sitter, { scaleY: 1 - 0.07 * M, scaleX: 1 + 0.035 * M, duration: 0.06, ease: 'power1.out' }, 10.18);
-  tl.to(sitter, { scaleY: 1, scaleX: 1, yPercent: -1.6 * M, duration: 0.12, ease: 'power2.out' }, 10.24);
-  tl.to(sitter, { yPercent: 0, duration: 0.12, ease: 'power2.in' }, 10.36);
-  tl.to(chair, { yPercent: 0.7 * M, rotation: -1.2 * M, duration: 0.06, ease: 'power1.out' }, 10.18);
-  tl.to(chair, { yPercent: 0, rotation: 0, duration: 0.5, ease: 'elastic.out(1, 0.35)' }, 10.24);
-  tl.to(sitter, { rotation: -1.2 * M, duration: 0.18, ease: 'sine.out' }, 10.48);
-  tl.to(sitter, { rotation: 0, duration: 0.3, ease: 'sine.inOut' }, 10.66);
-  reveal(lines($('.nurf-h')), 10.6);
+  /* S7 · NURF Pharmacy, IGMH (the jump itself is acting) */
+  tl.to([ambB, shade], { opacity: 1, duration: 0.8 }, 9.1);
+  reveal(lines($('.nurf-h')), 10.4);
 
-  /* ============ S8 · Chair swivel + responsibilities ==== */
+  /* S8 · Chair swivel + responsibilities */
   tl.fromTo(stage, stageAt('B'), { ...stageAt('B2'), duration: 0.5, ease: 'power2.inOut', immediateRender: false }, 11.6);
   const nurfUp = () => -G.vh * (G.desk ? 0.04 : 0.15);
   tl.to(nurf, { y: nurfUp, duration: 0.5, ease: 'power2.inOut' }, 11.6);
   tl.to(ticker, { opacity: 1, y: 0, duration: 0.4 }, 11.8);
 
   const rowH = () => items[0].offsetHeight;
-  const T0 = 12.0, STEP = 0.42;
+  const T0 = 12.0, TSTEP = 0.42;
   items.forEach((li, i) => {
     if (!i) return;
-    const at = T0 + i * STEP;
+    const at = T0 + i * TSTEP;
     tl.to(tickerList, { y: () => -i * rowH(), duration: 0.28, ease: 'power2.inOut' }, at);
     tl.to(li, { opacity: 1, duration: 0.28 }, at);
     tl.to(items[i - 1], { opacity: 0.25, duration: 0.28 }, at);
   });
 
   // the swivel chair turns with him
-  tl.to([chair, sitter], { rotationY: 14 * M, duration: 0.7, ease: 'sine.inOut' }, 12.0);
-  tl.to([chair, sitter], { rotationY: -14 * M, duration: 1.2, ease: 'sine.inOut' }, 12.7);
-  tl.to([chair, sitter], { rotationY: 0, duration: 0.8, ease: 'sine.inOut' }, 13.9);
+  tl.to([chair, sitterRig], { rotationY: 14 * M, duration: 0.7, ease: 'sine.inOut' }, 12.0);
+  tl.to([chair, sitterRig], { rotationY: -14 * M, duration: 1.2, ease: 'sine.inOut' }, 12.7);
+  tl.to([chair, sitterRig], { rotationY: 0, duration: 0.8, ease: 'sine.inOut' }, 13.9);
 
-  /* ============ S9 · Connect with me ==================== */
+  /* S9 · Connect with me */
   tl.fromTo(stage, stageAt('B2'), {
     x: () => G.B2.x, y: () => G.B2.y - G.vh * 1.15 * M,
     duration: 0.8, ease: 'power2.in', immediateRender: false,
@@ -325,7 +402,7 @@
   tl.to({}, { duration: 0.4 }, 17.2); // hold on the last frame
 
   /* ---------- Scroll wiring ---------- */
-  const st = ScrollTrigger.create({
+  ScrollTrigger.create({
     animation: tl,
     trigger: film,
     start: 'top top',
@@ -334,6 +411,14 @@
     scrub: RM ? true : 1.2,
     anticipatePin: 1,
     invalidateOnRefresh: true,
+    // cue the acting from where the scroll is heading, not the lagging scrub
+    onUpdate: (self) => direct(self.progress * tl.duration()),
+  });
+
+  // re-measure the acting's position-based moves after a resize
+  ScrollTrigger.addEventListener('refresh', () => {
+    const t = act.time();
+    act.seek(0).invalidate().seek(t);
   });
 
   let lenis = null;
