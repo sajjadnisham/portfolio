@@ -29,21 +29,26 @@ Every CSS, JS and image link in `index.html` carries a `?v=` version tag. Browse
 
 The links are in `index.html`, in the `SOCIAL LINKS` block of the Connect scene: Instagram, X, LinkedIn, Gmail, WhatsApp (+960 923 9234) and Facebook.
 
-## The story (one pinned timeline)
+## How the animation works
 
-| Beat | Scene |
-| --- | --- |
-| 0 | **Intro**: "I am Nisham Sajjad," types in word by word |
-| 0.1 | **Portrait**: close-up slides in from the right, 8-years line and divider draw in |
-| 1.7 | **Mission Hospital**: he turns away, walks back into the hospital as a rim-lit silhouette, then turns round to face us |
-| 3.7 | **COVID**: pulls the mask out of his pocket and presses it onto his face |
-| 5.1 | **NABH**: a file is tossed in and he catches it; "(NABH)" appears letter by letter with a shine sweep |
-| 7.1 | **Maldives**: plane flies in with parallax clouds and a spinning propeller |
-| 8.95 | **NURF Pharmacy, IGMH**: he crouches, jumps out (the plane flies on without him), falls as IGMH rises into view, and lands in his chair; the chair rocks and he settles back |
-| 11.6 | **Responsibilities**: chair swivels, ticker scrolls through the 7 duties |
-| 15.2 | **Connect**: everything lifts away, round portrait, orbit draws, six social icons pop in |
+There are two timelines in `script.js`:
 
-The beats are timeline units in `script.js`. Each beat is 0.75 viewport heights of scroll, set by the `BEAT` constant. Change `BEAT` to make the whole film faster or slower.
+- **`tl` (scroll-linked):** scenes, backgrounds, camera framing and text follow the scroll position. Scrolling back up reverses them. Timeline units are "beats", and each beat is 0.75 viewport heights of scroll (`BEAT`).
+- **`act` (free-running):** the character's acting. When the scroll reaches a scene, he plays that moment at natural speed, and plays it backwards when you scroll up. So he moves freely instead of stuttering with your finger.
+
+| Scroll beat | Scene | What he does |
+| --- | --- | --- |
+| 0 | Intro | "I am Nisham Sajjad," types in word by word |
+| 0.1 | Portrait | close-up slides in, 8-years line draws in |
+| 1.75 | Mission Hospital | turns away, walks into the hospital as a rim-lit silhouette with his legs stepping, turns round, settles |
+| 3.7 | COVID | leans to his pocket, the mask arcs up onto his face, small nod |
+| 5.1 | NABH | a file is tossed in on an arc, he catches it; "(NABH)" letter reveal + shine |
+| 7.1 | Maldives | plane flies in with parallax clouds and a spinning propeller |
+| 8.95 | NURF Pharmacy, IGMH | crouches, jumps out, the plane flies on, he falls as IGMH rises, lands in his chair (squash, rebound, the chair rocks), leans back |
+| 11.6 | Responsibilities | chair swivels with him, the duties ticker scrolls |
+| 15.2 | Connect | everything lifts away, the social-link orbit draws in |
+
+Between moments he is never frozen: he breathes and shifts his weight, and the plane bobs.
 
 ## Artwork
 
@@ -51,6 +56,7 @@ All images live in `assets/img/`. The storyboard pages were flat images, so `too
 
 - **Stage layers** keep the storyboard's **941×1672 canvas** so they stack exactly: `portrait`, `hospital`, `hospital-blur`, `char-stand`, `char-mask`, `char-clipboard`, `igmh`, `chair`, `sitter`, `desk`.
 - **Free layers**: `plane-empty`, `pilot`, `mask-item`, `cloud-1..3`, `nabh-word`, `avatar`. The clipboard he catches is an inline SVG.
+- `tools/extract_rig.py` cuts the standing character into a puppet (upper body + two legs with hip joints) for the walk.
 - `tools/extract_sprites.py` (second pass) makes the portrait with coat, the mask, the pilot and empty plane, and splits chair / character / laptop. `plane.webp` and `seated.webp` are its inputs and aren't loaded by the page.
 - The backgrounds had the character and baked-in text painted out, which is why the building plates are clean.
 
@@ -60,6 +66,7 @@ All images live in `assets/img/`. The storyboard pages were flat images, so `too
 pip install pymupdf pillow opencv-python-headless "rembg[cpu]" torch simple-lama-inpainting
 python tools/extract_assets.py path/to/portfolio.pdf
 python tools/extract_sprites.py path/to/portfolio.pdf
+python tools/extract_rig.py
 ```
 
 **For fully hand-animated acting** (a real walk cycle seen from behind, his hand lifting the mask, a full-body jump), ask the illustrator for short frame sequences of those poses. Each beat in `script.js` is commented, so frames can be swapped in there.
