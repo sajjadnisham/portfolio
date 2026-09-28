@@ -104,7 +104,6 @@
   const shade = $('.shade');
   const ambA = $('.amb-a');
   const ambB = $('.amb-b');
-  const hint = $('.hint');
 
   const avatar = $('.avatar');
   const ringDraw = $('.ring-draw');
@@ -169,7 +168,6 @@
 
   /* ===================== S1 · Intro ===================== */
   tl.fromTo(stage, stageAt('A'), { ...stageAt('A'), duration: 0.001 }, 0);
-  tl.to(hint, { opacity: 0, duration: 0.3 }, 0.02);
 
   /* ============ S2 · Portrait + experience ============== */
   tl.to($('.intro-h'), { y: () => -G.vh * (G.desk ? 0.03 : 0.065) * M, duration: 0.8, ease: 'power2.inOut' }, 0.1);
@@ -333,10 +331,9 @@
     start: 'top top',
     end: () => '+=' + Math.round(tl.duration() * G.vh * BEAT),
     pin: true,
-    scrub: RM ? true : 1.1,
+    scrub: RM ? true : 1.2,
     anticipatePin: 1,
     invalidateOnRefresh: true,
-    onUpdate: syncDots,
   });
 
   let lenis = null;
@@ -347,40 +344,6 @@
     gsap.ticker.lagSmoothing(0);
   }
   const scrollToY = (y) => (lenis ? lenis.scrollTo(y, { duration: 1.6 }) : window.scrollTo({ top: y, behavior: RM ? 'auto' : 'smooth' }));
-  const timeToY = (t) => st.start + (t / tl.duration()) * (st.end - st.start);
-
-  /* ---------- Chapter dots ---------- */
-  const CHAPTERS = [
-    ['Intro', 0, 0],
-    ['Experience', 0.1, 1.5],
-    ['Mission Hospital', 1.7, 3.55],
-    ['COVID', 3.7, 5.0],
-    ['NABH', 5.1, 6.95],
-    ['Maldives', 7.1, 8.7],
-    ['NURF Pharmacy', 8.95, 11.3],
-    ['Responsibilities', 11.6, 14.8],
-    ['Connect', 15.2, 17.6],
-  ];
-  const nav = $('.dots');
-  const dots = CHAPTERS.map(([name, , land]) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.setAttribute('aria-label', name);
-    b.title = name;
-    b.addEventListener('click', () => scrollToY(timeToY(land)));
-    nav.appendChild(b);
-    return b;
-  });
-  function syncDots() {
-    const t = tl.time();
-    let on = 0;
-    CHAPTERS.forEach(([, start], i) => { if (t >= start - 0.001) on = i; });
-    dots.forEach((d, i) => {
-      d.classList.toggle('on', i === on);
-      if (i === on) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current');
-    });
-  }
-  syncDots();
 
   $('.logo').addEventListener('click', (e) => { e.preventDefault(); scrollToY(0); });
 
@@ -416,7 +379,6 @@
       const to = { opacity: 1, y: 0, duration: 0.6, stagger: 0.18, ease: 'power2.out', delay: 0.3 };
       if (!RM) to.filter = 'blur(0px)';
       gsap.to($$('.intro-h .w'), to);
-      document.documentElement.classList.add('loaded'); // CSS fades the scroll hint in
     }, 250);
   }
   // never trap the visitor behind the loader

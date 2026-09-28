@@ -21,6 +21,10 @@ Upload the folder as-is to Netlify, Vercel, or GitHub Pages. For GitHub Pages, g
 
 With GitHub Pages enabled on `main`, the site is served at https://sajjadnisham.github.io/portfolio/. The link-preview tags in `index.html` already point there. Update them if you move to a custom domain.
 
+## Updating the site
+
+Every CSS, JS and image link in `index.html` carries a `?v=` version tag. Browsers cache GitHub Pages files, so bump that tag on every change (find and replace all), or visitors may get the new page with old files.
+
 ## Social links
 
 The links are in `index.html`, in the `SOCIAL LINKS` block of the Connect scene: Instagram, X, LinkedIn, Gmail, WhatsApp (+960 923 9234) and Facebook.
@@ -39,7 +43,7 @@ The links are in `index.html`, in the `SOCIAL LINKS` block of the Connect scene:
 | 11.6 | **Responsibilities**: chair swivels, ticker scrolls through the 7 duties |
 | 15.2 | **Connect**: everything lifts away, round portrait, orbit draws, six social icons pop in |
 
-The beats are timeline units in `script.js`. Each beat is 0.75 viewport heights of scroll, set by the `BEAT` constant. Change `BEAT` to make the whole film faster or slower. The dots on the right jump between chapters.
+The beats are timeline units in `script.js`. Each beat is 0.75 viewport heights of scroll, set by the `BEAT` constant. Change `BEAT` to make the whole film faster or slower.
 
 ## Artwork
 
