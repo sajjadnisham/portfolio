@@ -97,9 +97,8 @@
   const legL = $('.leg-l');
   const legR = $('.leg-r');
   const upper = $('.hero-upper');
-  const masked = $('.ch-mask');
+  const maskf = $$('.maskf');           // puts the mask on by hand, 4 frames
   const clip = $('.ch-clip');
-  const maskItem = $('.mask-item');
   const files = $('.files');
 
   const cam = $('.cam');
@@ -150,7 +149,7 @@
     { cx: 683, feet: 1509, h: 558 },   // 4 furthest
     { cx: 704, feet: 1550, h: 615 },   // 5 looking back over his shoulder
   ];
-  const HERO = { cx: 700, feet: 1618, h: 758 };
+  const HERO = { cx: 713, feet: 1613, h: 748 };
   const origin = (f) => `${f.cx / 9.41}% ${f.feet / 16.72}%`;
   // transform that makes figure `a` stand exactly where figure `b` stands
   const place = (a, b) => ({ scale: b.h / a.h, xPercent: (b.cx - a.cx) / 9.41, yPercent: (b.feet - a.feet) / 16.72 });
@@ -160,8 +159,21 @@
   gsap.set(legL, { transformOrigin: '70.67% 77.15%' });                     // hips (665,1290)
   gsap.set(legR, { transformOrigin: '79.17% 77.15%' });                     //      (745,1290)
   gsap.set(upper, { transformOrigin: '75% 78%' });                          // waist
-  gsap.set([masked, clip], { opacity: 0 });
-  gsap.set(maskItem, { opacity: 0, xPercent: 70 * M, yPercent: 390 * M, rotation: 40 * M, scale: 1 - 0.3 * M });
+  // Mask-on frames (tools/mask-frames.json) and the page-5 clipboard pose, all
+  // placed on his page-3 mark. The mask frames share one scale so his posture
+  // differences (leaning into the pocket) survive.
+  const MASKF = [
+    { cx: 726, feet: 1575, h: 829 },   // 1 pulls the mask from his pocket
+    { cx: 702, feet: 1601, h: 883 },   // 2 lifts it
+    { cx: 714, feet: 1595, h: 878 },   // 3 hooks the ear loops
+    { cx: 701, feet: 1611, h: 894 },   // 4 hands down, mask on
+  ];
+  const CLIP = { cx: 714, feet: 1593, h: 732 };
+  maskf.forEach((el, i) => gsap.set(el, {
+    opacity: 0, transformOrigin: origin(MASKF[i]),
+    scale: HERO.h / 885, xPercent: (HERO.cx - MASKF[i].cx) / 9.41, yPercent: (HERO.feet - MASKF[i].feet) / 16.72,
+  }));
+  gsap.set(clip, { opacity: 0, transformOrigin: origin(CLIP), ...place(CLIP, HERO) });
   gsap.set(files, { opacity: 0 });
   gsap.set(setA, { transformOrigin: '75% 60%' });
   gsap.set(cam, { yPercent: 100 });                                        // IGMH waits below
@@ -253,18 +265,17 @@
   }
   act.addLabel('hosp', '+=0.15');
 
-  /* --- S4 · takes the mask out of his pocket and puts it on --- */
-  act.to(upper, { rotation: 2.2 * M, duration: 0.3, ease: 'power2.out' }, 'hosp');          // leans to the pocket
-  act.to(maskItem, { opacity: 1, duration: 0.1 }, 'hosp+=0.18');
-  act.to(maskItem, { xPercent: 0, rotation: 0, scale: 1, duration: 0.6, ease: 'power1.inOut' }, 'hosp+=0.25');
-  act.to(maskItem, { yPercent: 0, duration: 0.6, ease: 'back.out(1.2)' }, 'hosp+=0.25');
-  act.to(upper, { rotation: -1.2 * M, duration: 0.35, ease: 'sine.inOut' }, 'hosp+=0.35');    // straightens, chin up
-  act.to(masked, { opacity: 1, duration: 0.1 }, 'hosp+=0.84');
-  act.to(maskItem, { opacity: 0, duration: 0.1 }, 'hosp+=0.9');
-  act.set(poseStand, { opacity: 0 }, 'hosp+=0.95');
-  act.to(upper, { rotation: 0, duration: 0.2 }, 'hosp+=0.95');
-  act.to(hero, { yPercent: 0.35 * M, duration: 0.13, yoyo: true, repeat: 1, ease: 'sine.inOut' }, 'hosp+=0.9'); // nod
-  act.addLabel('mask', 'hosp+=1.35');
+  /* --- S4 · takes the mask out of his pocket and puts it on (drawn frames) --- */
+  const poses = [poseStand, ...maskf];
+  const HOLD = [0.1, 0.6, 0.55, 0.75];      // when each mask frame comes in (after the previous one)
+  let mt = 0;
+  maskf.forEach((el, i) => {
+    mt += HOLD[i];
+    act.to(el, { opacity: 1, duration: 0.09, ease: 'none' }, `hosp+=${mt}`);
+    act.set(poses[i], { opacity: 0 }, `hosp+=${mt + 0.09}`);
+    act.to(hero, { y: 3, duration: 0.1, yoyo: true, repeat: 1, ease: 'sine.inOut' }, `hosp+=${mt}`);   // weight follows the arms
+  });
+  act.addLabel('mask', `hosp+=${mt + 0.55}`);
 
   /* --- S5 · a file is tossed in; he catches it --- */
   act.set(files, { opacity: 1 }, 'mask');
@@ -277,7 +288,7 @@
   act.to(hero, { xPercent: 0.7 * M, rotation: 0.8 * M, duration: 0.08, ease: 'power1.out' }, 'mask+=0.73'); // catch recoil
   act.to(hero, { xPercent: 0, rotation: 0, duration: 0.3, ease: 'power2.out' }, 'mask+=0.81');
   act.to(clip, { opacity: 1, duration: 0.15 }, 'mask+=0.74');
-  act.set([masked, files], { opacity: 0 }, 'mask+=0.9');
+  act.set([maskf[3], files], { opacity: 0 }, 'mask+=0.9');
   act.addLabel('files', 'mask+=1.2');
 
   /* --- S7 · jumps out of the plane and falls into his chair --- */

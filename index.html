@@ -18,26 +18,26 @@
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
 
-  <link rel="icon" href="assets/img/logo.svg?v=20260928d" type="image/svg+xml">
+  <link rel="icon" href="assets/img/logo.svg?v=20260928e" type="image/svg+xml">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
 
   <!-- ?v= forces browsers to fetch fresh files after an update: bump it on every change -->
-  <link rel="stylesheet" href="styles.css?v=20260928d">
+  <link rel="stylesheet" href="styles.css?v=20260928e">
 </head>
 <body>
 
   <!-- Loading screen: "N" logo + thin progress line -->
   <div id="loader" aria-hidden="true">
-    <img src="assets/img/logo.svg?v=20260928d" alt="" width="72" height="72">
+    <img src="assets/img/logo.svg?v=20260928e" alt="" width="72" height="72">
     <div class="loader-bar"><span></span></div>
   </div>
 
   <!-- Logo badge, fixed on every scene, links back to the top -->
   <a class="logo" href="#top" aria-label="Back to top">
-    <img src="assets/img/logo.svg?v=20260928d" alt="N" width="56" height="56">
+    <img src="assets/img/logo.svg?v=20260928e" alt="N" width="56" height="56">
   </a>
 
   <!--
@@ -50,8 +50,8 @@
 
       <!-- Desktop only: soft blurred copy of the current backdrop so the scene fills 16:9 -->
       <div class="ambient" aria-hidden="true">
-        <img class="amb amb-a" src="assets/img/hospital.webp?v=20260928d" alt="">
-        <img class="amb amb-b" src="assets/img/igmh.webp?v=20260928d" alt="">
+        <img class="amb amb-a" src="assets/img/hospital.webp?v=20260928e" alt="">
+        <img class="amb amb-b" src="assets/img/igmh.webp?v=20260928e" alt="">
       </div>
 
       <!--
@@ -62,31 +62,33 @@
       <div class="stage" aria-hidden="true">
         <!-- Scenes 3–5 : Mission Hospital -->
         <div class="set set-a">
-          <img class="L bg-hosp"   src="assets/img/hospital.webp?v=20260928d"       alt="">
-          <img class="L bg-blur"   src="assets/img/hospital-blur.webp?v=20260928d"  alt="">
-          <img class="nabh-word"   src="assets/img/nabh-word.webp?v=20260928d"      alt="">
+          <img class="L bg-hosp"   src="assets/img/hospital.webp?v=20260928e"       alt="">
+          <img class="L bg-blur"   src="assets/img/hospital-blur.webp?v=20260928e"  alt="">
+          <img class="nabh-word"   src="assets/img/nabh-word.webp?v=20260928e"      alt="">
           <div class="sign-glow"><span></span></div>
           <!-- Back-view walk frames (near → far, then looking back over his shoulder) -->
-          <img class="L walk" src="assets/img/walk-1.webp?v=20260928d" alt="">
-          <img class="L walk" src="assets/img/walk-2.webp?v=20260928d" alt="">
-          <img class="L walk" src="assets/img/walk-3.webp?v=20260928d" alt="">
-          <img class="L walk" src="assets/img/walk-4.webp?v=20260928d" alt="">
-          <img class="L walk" src="assets/img/walk-5.webp?v=20260928d" alt="">
+          <img class="L walk" src="assets/img/walk-1.webp?v=20260928e" alt="">
+          <img class="L walk" src="assets/img/walk-2.webp?v=20260928e" alt="">
+          <img class="L walk" src="assets/img/walk-3.webp?v=20260928e" alt="">
+          <img class="L walk" src="assets/img/walk-4.webp?v=20260928e" alt="">
+          <img class="L walk" src="assets/img/walk-5.webp?v=20260928e" alt="">
           <!-- The character: a small puppet rig (legs swing from the hips) plus
-               the masked / clipboard poses. .hero = acting moves, .breath = idle life. -->
+               the mask-on frames and the clipboard pose. .hero = acting moves, .breath = idle life. -->
           <div class="L hero">
             <div class="L breath">
               <div class="L pose-stand">
-                <img class="L leg leg-l"  src="assets/img/hero-leg-l.webp?v=20260928d"  alt="">
-                <img class="L leg leg-r"  src="assets/img/hero-leg-r.webp?v=20260928d"  alt="">
-                <img class="L hero-upper" src="assets/img/hero-upper.webp?v=20260928d" alt="">
+                <img class="L leg leg-l"  src="assets/img/hero-leg-l.webp?v=20260928e"  alt="">
+                <img class="L leg leg-r"  src="assets/img/hero-leg-r.webp?v=20260928e"  alt="">
+                <img class="L hero-upper" src="assets/img/hero-upper.webp?v=20260928e" alt="">
               </div>
-              <img class="L ch-mask" src="assets/img/char-mask.webp?v=20260928d"      alt="">
-              <img class="L ch-clip" src="assets/img/char-clipboard.webp?v=20260928d" alt="">
+              <img class="L maskf" src="assets/img/mask-1.webp?v=20260928e" alt="">
+              <img class="L maskf" src="assets/img/mask-2.webp?v=20260928e" alt="">
+              <img class="L maskf" src="assets/img/mask-3.webp?v=20260928e" alt="">
+              <img class="L maskf" src="assets/img/mask-4.webp?v=20260928e" alt="">
+              <img class="L ch-clip" src="assets/img/char-clipboard.webp?v=20260928e" alt="">
             </div>
           </div>
-          <!-- props the character interacts with -->
-          <img class="mask-item" src="assets/img/mask-item.webp?v=20260928d" alt="">
+          <!-- the file tossed to him -->
           <div class="files">
             <svg viewBox="0 0 50 130"><rect x="1" y="4" width="48" height="125" rx="4" fill="#27303d"/><rect x="5" y="10" width="40" height="112" rx="2" fill="#eef1f4"/><path d="M11 30h28M11 40h28M11 50h22M11 60h28M11 70h18" stroke="#9aa6b2" stroke-width="2"/><rect x="15" y="0" width="20" height="10" rx="3" fill="#c8ccd2"/><rect x="1" y="4" width="48" height="125" rx="4" fill="none" stroke="#0e141c" stroke-width="1.5"/></svg>
           </div>
@@ -95,32 +97,32 @@
         <!-- Scenes 7–8 : NURF Pharmacy, IGMH -->
         <div class="set set-b">
           <div class="L cam"><!-- rises into view as he falls -->
-            <img class="L bg-igmh"   src="assets/img/igmh.webp?v=20260928d"   alt="">
-            <img class="L chair"     src="assets/img/chair.webp?v=20260928d"  alt="">
-            <div class="L sitter-rig"><img class="L sitter" src="assets/img/sitter.webp?v=20260928d" alt=""></div>
-            <img class="L desk"      src="assets/img/desk.webp?v=20260928d"   alt="">
+            <img class="L bg-igmh"   src="assets/img/igmh.webp?v=20260928e"   alt="">
+            <img class="L chair"     src="assets/img/chair.webp?v=20260928e"  alt="">
+            <div class="L sitter-rig"><img class="L sitter" src="assets/img/sitter.webp?v=20260928e" alt=""></div>
+            <img class="L desk"      src="assets/img/desk.webp?v=20260928e"   alt="">
           </div>
         </div>
 
         <!-- Scene 2 : close-up portrait -->
-        <div class="L portrait-wrap"><img class="L portrait" src="assets/img/portrait.webp?v=20260928d" alt=""></div>
+        <div class="L portrait-wrap"><img class="L portrait" src="assets/img/portrait.webp?v=20260928e" alt=""></div>
       </div>
 
       <!-- Scene 6 : the flight to the Maldives -->
       <div class="sky" aria-hidden="true">
         <div class="flight">
           <div class="cloudset">
-            <img class="cloud c1" src="assets/img/cloud-1.webp?v=20260928d" alt="">
-            <img class="cloud c2" src="assets/img/cloud-2.webp?v=20260928d" alt="">
-            <img class="cloud c3" src="assets/img/cloud-3.webp?v=20260928d" alt="">
+            <img class="cloud c1" src="assets/img/cloud-1.webp?v=20260928e" alt="">
+            <img class="cloud c2" src="assets/img/cloud-2.webp?v=20260928e" alt="">
+            <img class="cloud c3" src="assets/img/cloud-3.webp?v=20260928e" alt="">
           </div>
           <div class="craft">
             <div class="bobber">
               <div class="plane">
-                <img src="assets/img/plane-empty.webp?v=20260928d" alt="">
+                <img src="assets/img/plane-empty.webp?v=20260928e" alt="">
                 <span class="prop"><i></i></span>
               </div>
-              <img class="pilot" src="assets/img/pilot.webp?v=20260928d" alt="Nisham waving from the cockpit of a small aeroplane">
+              <img class="pilot" src="assets/img/pilot.webp?v=20260928e" alt="Nisham waving from the cockpit of a small aeroplane">
             </div>
           </div>
         </div>
@@ -192,7 +194,7 @@
             </mask>
             <circle class="ring-dash" cx="50" cy="50" r="49" mask="url(#ring-mask)"/>
           </svg>
-          <div class="avatar"><img src="assets/img/avatar.webp?v=20260928d" alt="Portrait of Nisham Sajjad"></div>
+          <div class="avatar"><img src="assets/img/avatar.webp?v=20260928e" alt="Portrait of Nisham Sajjad"></div>
 
           <!--
             SOCIAL LINKS
@@ -231,9 +233,9 @@
     </section>
   </main>
 
-  <script src="assets/vendor/gsap.min.js?v=20260928d"></script>
-  <script src="assets/vendor/ScrollTrigger.min.js?v=20260928d"></script>
-  <script src="assets/vendor/lenis.min.js?v=20260928d"></script>
-  <script src="script.js?v=20260928d"></script>
+  <script src="assets/vendor/gsap.min.js?v=20260928e"></script>
+  <script src="assets/vendor/ScrollTrigger.min.js?v=20260928e"></script>
+  <script src="assets/vendor/lenis.min.js?v=20260928e"></script>
+  <script src="script.js?v=20260928e"></script>
 </body>
 </html>

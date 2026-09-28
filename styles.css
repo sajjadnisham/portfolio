@@ -118,11 +118,6 @@ html.lenis, html.lenis body { height: auto; }
   transform: translateX(-120%);
 }
 
-/* Mask the character pulls out of his pocket (box on the 941×1672 canvas: 718,942 68×62) */
-.mask-item {
-  position: absolute; left: 76.302%; top: 56.340%; width: 7.226%; height: 3.708%;
-  will-change: transform, opacity;
-}
 /* Files he catches (lands on the clipboard in the page-5 pose, ~810,1130, tilted 16°) */
 .files {
   position: absolute; left: 83.4%; top: 63.7%; width: 5.31%; height: 7.78%;
