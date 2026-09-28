@@ -1,0 +1,348 @@
+/* =========================================================
+   Nisham Sajjad — scroll-story
+   One pinned viewport + one scroll-scrubbed GSAP timeline.
+   Timeline units are "beats"; each beat = 0.75 viewport of scroll.
+
+   Scene map (beat → what happens)
+     0.0  S1  Intro                 "I am Nisham Sajjad,"
+     0.1  S2  Portrait + experience
+     1.7  S3  Mission Hospital      portrait → full-body, hospital fades in
+     3.4  S4  COVID mask
+     5.0  S5  NABH                  clipboard, "(NABH)" letter reveal + shine
+     7.0  S6  Flight to Maldives
+     9.6  S7  NURF Pharmacy, IGMH   desk slides up, character drops in
+    11.6  S8  Responsibilities      chair swivel + ticker
+    15.2  S9  Connect with me
+   ========================================================= */
+(() => {
+  'use strict';
+
+  gsap.registerPlugin(ScrollTrigger);
+  ScrollTrigger.config({ ignoreMobileResize: true });
+
+  const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // keep in sync with the desktop media query in styles.css
+  const DESKTOP_Q = matchMedia('(min-width: 1200px), (min-width: 900px) and (min-aspect-ratio: 13/10)');
+  const RATIO = 941 / 1672;        // storyboard canvas
+  const M = RM ? 0 : 1;            // motion multiplier: reduced motion → fades only
+  const BEAT = 0.75;               // viewport heights of scroll per timeline unit
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+  const film = $('#film');
+  const stage = $('.stage');
+
+  /* ---------------------------------------------------------
+     Stage geometry. The stage holds 941×1672 layers; we size
+     and place it per layout:
+       A  = Mission Hospital framing
+       B  = IGMH desk framing
+       B2 = IGMH with room for the responsibilities ticker
+     --------------------------------------------------------- */
+  const G = {};
+  function measure() {
+    const vw = film.clientWidth;
+    const vh = film.clientHeight;
+    const desk = DESKTOP_Q.matches;
+    let h, w;
+    if (desk) {
+      h = vh * 1.5;
+      w = h * RATIO;
+      if (w > vw * 0.62) { w = vw * 0.62; h = w / RATIO; }
+      const gap = Math.max(0, (vw * 0.6 - w) * 0.5);
+      G.A = { x: vw - w - gap, y: vh * 0.95 - h * 0.957 };
+      G.B = { x: vw * 0.68 - w * 0.47, y: vh * 0.56 - h * 0.51 };
+      G.B2 = G.B;
+    } else {
+      h = vh;
+      w = h * RATIO;
+      if (w < vw) { w = vw; h = w / RATIO; }
+      G.A = { x: Math.min(0, vw - w), y: vh - h };
+      G.B = { x: (vw - w) / 2, y: vh - h };
+      G.B2 = { x: G.B.x, y: G.B.y - vh * 0.15 };
+    }
+    Object.assign(G, { vw, vh, w, h, desk });
+    stage.style.width = w + 'px';
+    stage.style.height = h + 'px';
+  }
+  measure();
+  ScrollTrigger.addEventListener('refreshInit', measure);
+
+  /* ---------- Elements ---------- */
+  const intro = $('.c-intro');
+  const journey = $('.c-journey');
+  const mald = $('.c-maldives');
+  const nurf = $('.c-nurf');
+  const ticker = $('.ticker');
+  const tickerList = $('.ticker ul');
+  const items = $$('.ticker li');
+
+  const setA = $('.set-a');
+  const bgHosp = $('.bg-hosp');
+  const bgBlur = $('.bg-blur');
+  const word = $('.nabh-word');
+  const shine = $('.sign-glow span');
+  const stand = $('.ch-stand');
+  const mask = $('.ch-mask');
+  const clip = $('.ch-clip');
+  const igmh = $('.bg-igmh');
+  const seated = $('.seated');
+  const desk = $('.desk');
+  const portrait = $('.portrait');
+
+  const plane = $('.plane');
+  const [c1, c2, c3] = $$('.cloud');
+
+  const fx = $('.fx');
+  const shade = $('.shade');
+  const ambA = $('.amb-a');
+  const ambB = $('.amb-b');
+  const hint = $('.hint');
+
+  const avatar = $('.avatar');
+  const ringDraw = $('.ring-draw');
+  const icons = $$('.ico');
+  const label = $('.connect-label');
+  const foot = $('.foot');
+
+  const lines = (el) => $$('.ln', el);
+
+  /* ---------- Initial states ---------- */
+  const hidden = { opacity: 0, y: 30 * M };
+  if (!RM) hidden.filter = 'blur(6px)';
+  gsap.set($$('.copy .ln'), hidden);
+  gsap.set($$('.intro-h .w'), hidden);
+  gsap.set(lines(mald), { y: 60 * M });
+  gsap.set($$('.rule'), { scaleX: 0 });
+
+  gsap.set([bgHosp, bgBlur, stand, clip, igmh, portrait, ambA, ambB, fx, shade], { opacity: 0 });
+  gsap.set(mask, { clipPath: 'inset(60.53% 0% 39.47% 0%)' });           // face band, zero height
+  gsap.set(word, { clipPath: 'inset(0% 100% 0% 0%)' });
+  gsap.set(portrait, { xPercent: 25 * M, scale: 1 + 0.08 * M, transformOrigin: '91.4% 56.8%' });
+  gsap.set(stand, { transformOrigin: '79.2% 55.6%' });                   // his head
+  gsap.set(setA, { transformOrigin: '75% 60%' });
+  gsap.set(desk, { opacity: 0, yPercent: 22 * M });
+  gsap.set(seated, { opacity: 0, yPercent: -75 * M, transformOrigin: '50% 59%', transformPerspective: 900 });
+  gsap.set(ticker, { opacity: 0, y: 20 * M });
+  gsap.set(items, { opacity: 0.25 });
+  gsap.set(items[0], { opacity: 1 });
+  gsap.set([avatar, ...icons], { opacity: 0, scale: 0 });
+  gsap.set([label, foot], { opacity: 0 });
+
+  /* ---------- Helpers ---------- */
+  const tl = gsap.timeline({ defaults: { ease: 'power2.out', duration: 0.5 } });
+
+  // fade + slide up + blur-to-sharp, line by line
+  function reveal(targets, at, extra = {}) {
+    const to = { opacity: 1, y: 0, duration: 0.45, stagger: 0.12, ease: 'power2.out', ...extra };
+    if (!RM) to.filter = 'blur(0px)';
+    tl.to(targets, to, at);
+  }
+  const drawRule = (el, at) => tl.to(el, { scaleX: 1, duration: 0.35, ease: 'power2.inOut' }, at);
+  const stageAt = (key) => ({ x: () => G[key].x, y: () => G[key].y });
+
+  /* ===================== S1 · Intro ===================== */
+  tl.fromTo(stage, stageAt('A'), { ...stageAt('A'), duration: 0.001 }, 0);
+  tl.to(hint, { opacity: 0, duration: 0.3 }, 0.02);
+
+  /* ============ S2 · Portrait + experience ============== */
+  tl.to($('.intro-h'), { y: () => -G.vh * (G.desk ? 0.03 : 0.065) * M, duration: 0.8, ease: 'power2.inOut' }, 0.1);
+  tl.to(portrait, { opacity: 1, xPercent: 0, scale: 1, duration: 1, ease: 'power3.out' }, 0.2);
+  reveal(lines($('.b', intro)), 0.7);
+  drawRule($('.rule', intro), 1.15);
+
+  /* ============ S3 · Journey begins (Mission Hospital) === */
+  tl.to(intro, { opacity: 0, y: -40 * M, duration: 0.4, ease: 'power2.in' }, 1.7);
+  // portrait shrinks back into the scene, onto the full-body character's head…
+  tl.to(portrait, { scale: RM ? 1 : 0.3, xPercent: -12.2 * M, yPercent: -1.2 * M, duration: 0.8, ease: 'power3.inOut' }, 1.75);
+  tl.to(portrait, { opacity: 0, duration: 0.35, ease: 'none' }, 2.2);
+  // …while the full-body character zooms out from that same head
+  tl.fromTo(stand, { scale: 1 + 2.2 * M }, { scale: 1, duration: 0.8, ease: 'power3.inOut' }, 1.75);
+  tl.to(stand, { opacity: 1, duration: 0.4, ease: 'none' }, 2.05);
+  tl.fromTo(bgHosp, { scale: 1 + 0.1 * M }, { scale: 1, duration: 1.1 }, 1.95);
+  tl.to(bgHosp, { opacity: 1, duration: 0.9 }, 1.95);
+  tl.to([fx, ambA, shade], { opacity: 1, duration: 0.8 }, 2.0);
+  reveal(lines($('.h', journey)), 2.6);
+
+  /* ============ S4 · COVID mask ========================= */
+  tl.to(mask, { clipPath: 'inset(54.9% 0% 39.47% 0%)', duration: 0.5, ease: 'power2.inOut' }, 3.45);
+  reveal(lines($('.covid', journey)), 3.9);
+  drawRule($('.rule', journey), 4.4);
+
+  /* ============ S5 · NABH =============================== */
+  tl.to(clip, { opacity: 1, duration: 0.4 }, 5.0);
+  tl.to([stand, mask], { opacity: 0, duration: 0.05 }, 5.4);
+  tl.to(bgBlur, { opacity: 1, duration: 0.6 }, 5.0);
+  tl.to(journey, { y: () => (G.desk ? 0 : -G.vh * 0.05), duration: 0.6, ease: 'power2.inOut' }, 5.0);
+  // "(NABH)" appears one character at a time (6 glyphs → 6 steps)
+  tl.to(word, { clipPath: 'inset(0% 0% 0% 0%)', duration: 0.6, ease: 'steps(6)' }, 5.55);
+  reveal(lines($('.nabh', journey)), 5.9);
+  tl.fromTo(shine, { xPercent: -120 }, { xPercent: 380, duration: 0.7, ease: 'power1.inOut' }, 6.15);
+
+  /* ============ S6 · Moving to Maldives ================= */
+  tl.to(setA, { opacity: 0, scale: 1 + 0.06 * M, duration: 0.6, ease: 'power2.in' }, 7.0);
+  tl.to(journey, { opacity: 0, duration: 0.5, ease: 'power2.in' }, 7.0);
+  tl.to([fx, ambA, shade], { opacity: 0, duration: 0.5 }, 7.0);
+  tl.fromTo(stage, stageAt('A'), { ...stageAt('B'), duration: 0.1, immediateRender: false }, 7.7);
+
+  tl.fromTo(plane,
+    { opacity: 0, xPercent: -200 * M, yPercent: 30 * M, rotation: 10 * M },
+    { opacity: 1, xPercent: 0, yPercent: 0, rotation: 0, duration: 1, ease: 'power3.out' }, 7.4);
+  tl.fromTo(c1, { opacity: 0, xPercent: 200 * M }, { opacity: 1, xPercent: 0, duration: 1.1 }, 7.35);
+  tl.fromTo(c2, { opacity: 0, xPercent: 320 * M }, { opacity: 1, xPercent: 0, duration: 1.2 }, 7.4);
+  tl.fromTo(c3, { opacity: 0, xPercent: 380 * M }, { opacity: 1, xPercent: 0, duration: 1.3 }, 7.45);
+  reveal(lines(mald), 8.0, { ease: 'power3.out' }); // rises from further down (see initial states)
+  tl.to(plane, { yPercent: -6 * M, rotation: -2 * M, duration: 0.5, ease: 'sine.inOut' }, 8.4);
+
+  tl.to(plane, { xPercent: 200 * M, yPercent: -140 * M, rotation: -12 * M, duration: 0.9, ease: 'power2.in' }, 8.9);
+  tl.to(plane, { opacity: 0, duration: 0.25 }, 9.55);
+  tl.to(c1, { xPercent: -260 * M, opacity: 0, duration: 1 }, 8.9);
+  tl.to(c2, { xPercent: -420 * M, opacity: 0, duration: 1 }, 8.9);
+  tl.to(c3, { xPercent: -460 * M, opacity: 0, duration: 1 }, 8.9);
+  tl.to(mald, { opacity: 0, y: -30 * M, duration: 0.4, ease: 'power2.in' }, 9.3);
+
+  /* ============ S7 · NURF Pharmacy, IGMH ================ */
+  tl.fromTo(igmh, { scale: 1 + 0.08 * M }, { scale: 1, duration: 0.9 }, 9.6);
+  tl.to(igmh, { opacity: 1, duration: 0.8 }, 9.6);
+  tl.to([ambB, shade], { opacity: 1, duration: 0.8 }, 9.6);
+  tl.to(desk, { opacity: 1, yPercent: 0, duration: 0.6, ease: 'power3.out' }, 10.0);
+  // the character drops in from the top and lands in the chair
+  tl.to(seated, { opacity: 1, duration: 0.1, ease: 'none' }, 10.5);
+  tl.to(seated, { yPercent: 0, duration: 0.7, ease: 'bounce.out' }, 10.5);
+  tl.to(seated, { scaleY: 1 - 0.06 * M, scaleX: 1 + 0.03 * M, duration: 0.07, ease: 'power1.out' }, 10.76);
+  tl.to(seated, { scaleY: 1, scaleX: 1, duration: 0.15, ease: 'power1.out' }, 10.83);
+  reveal(lines($('.nurf-h')), 10.85);
+
+  /* ============ S8 · Chair swivel + responsibilities ==== */
+  tl.fromTo(stage, stageAt('B'), { ...stageAt('B2'), duration: 0.5, ease: 'power2.inOut', immediateRender: false }, 11.6);
+  const nurfUp = () => -G.vh * (G.desk ? 0.04 : 0.15);
+  tl.to(nurf, { y: nurfUp, duration: 0.5, ease: 'power2.inOut' }, 11.6);
+  tl.to(ticker, { opacity: 1, y: 0, duration: 0.4 }, 11.8);
+
+  const rowH = () => items[0].offsetHeight;
+  const T0 = 12.0, STEP = 0.42;
+  items.forEach((li, i) => {
+    if (!i) return;
+    const at = T0 + i * STEP;
+    tl.to(tickerList, { y: () => -i * rowH(), duration: 0.28, ease: 'power2.inOut' }, at);
+    tl.to(li, { opacity: 1, duration: 0.28 }, at);
+    tl.to(items[i - 1], { opacity: 0.25, duration: 0.28 }, at);
+  });
+
+  tl.to(seated, { rotationY: 14 * M, rotationZ: 1.2 * M, duration: 0.7, ease: 'sine.inOut' }, 12.0);
+  tl.to(seated, { rotationY: -14 * M, rotationZ: -1.2 * M, duration: 1.2, ease: 'sine.inOut' }, 12.7);
+  tl.to(seated, { rotationY: 0, rotationZ: 0, duration: 0.8, ease: 'sine.inOut' }, 13.9);
+
+  /* ============ S9 · Connect with me ==================== */
+  tl.fromTo(stage, stageAt('B2'), {
+    x: () => G.B2.x, y: () => G.B2.y - G.vh * 1.15 * M,
+    duration: 0.8, ease: 'power2.in', immediateRender: false,
+  }, 15.2);
+  tl.to(stage, { opacity: 0, duration: 0.4 }, 15.6);
+  tl.to(nurf, { y: () => nurfUp() - G.vh * 1.1 * M, opacity: 0, duration: 0.8, ease: 'power2.in' }, 15.2);
+  tl.to([ambB, shade], { opacity: 0, duration: 0.6 }, 15.2);
+
+  tl.to(avatar, { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.6)' }, 15.8);
+  tl.fromTo(ringDraw, { strokeDashoffset: 100 }, { strokeDashoffset: 0, duration: 0.7, ease: 'power1.inOut' }, 16.1);
+  tl.to(icons, { opacity: 1, scale: 1, duration: 0.35, ease: 'back.out(3)', stagger: 0.12 }, 16.5);
+  tl.to(label, { opacity: 1, duration: 0.4 }, 17.0);
+  tl.to(foot, { opacity: 1, duration: 0.4 }, 17.1);
+  tl.to({}, { duration: 0.4 }, 17.2); // hold on the last frame
+
+  /* ---------- Scroll wiring ---------- */
+  const st = ScrollTrigger.create({
+    animation: tl,
+    trigger: film,
+    start: 'top top',
+    end: () => '+=' + Math.round(tl.duration() * G.vh * BEAT),
+    pin: true,
+    scrub: RM ? true : 0.8,
+    anticipatePin: 1,
+    invalidateOnRefresh: true,
+    onUpdate: syncDots,
+  });
+
+  let lenis = null;
+  if (!RM && window.Lenis) {
+    lenis = new Lenis({ lerp: 0.09, smoothWheel: true });
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add((t) => lenis.raf(t * 1000));
+    gsap.ticker.lagSmoothing(0);
+  }
+  const scrollToY = (y) => (lenis ? lenis.scrollTo(y, { duration: 1.6 }) : window.scrollTo({ top: y, behavior: RM ? 'auto' : 'smooth' }));
+  const timeToY = (t) => st.start + (t / tl.duration()) * (st.end - st.start);
+
+  /* ---------- Chapter dots ---------- */
+  const CHAPTERS = [
+    ['Intro', 0, 0],
+    ['Experience', 0.1, 1.5],
+    ['Mission Hospital', 1.7, 3.3],
+    ['COVID', 3.4, 4.8],
+    ['NABH', 5.0, 6.8],
+    ['Maldives', 7.0, 8.6],
+    ['NURF Pharmacy', 9.6, 11.4],
+    ['Responsibilities', 11.6, 14.8],
+    ['Connect', 15.2, 17.6],
+  ];
+  const nav = $('.dots');
+  const dots = CHAPTERS.map(([name, , land]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('aria-label', name);
+    b.title = name;
+    b.addEventListener('click', () => scrollToY(timeToY(land)));
+    nav.appendChild(b);
+    return b;
+  });
+  function syncDots() {
+    const t = tl.time();
+    let on = 0;
+    CHAPTERS.forEach(([, start], i) => { if (t >= start - 0.001) on = i; });
+    dots.forEach((d, i) => {
+      d.classList.toggle('on', i === on);
+      if (i === on) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current');
+    });
+  }
+  syncDots();
+
+  $('.logo').addEventListener('click', (e) => { e.preventDefault(); scrollToY(0); });
+
+  /* ---------- Preloader ---------- */
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  window.scrollTo(0, 0);
+  if (lenis) lenis.stop();
+
+  const loader = $('#loader');
+  const bar = $('.loader-bar span');
+  const imgs = $$('img').filter((i) => !loader.contains(i));
+  let done = 0;
+  const total = imgs.length + 1; // + fonts
+  const tick = () => { done++; bar.style.transform = `scaleX(${done / total})`; if (done >= total) start(); };
+  imgs.forEach((img) => {
+    if (img.complete && img.naturalWidth) tick();
+    else {
+      img.addEventListener('load', tick, { once: true });
+      img.addEventListener('error', tick, { once: true });
+    }
+  });
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(tick);
+
+  let started = false;
+  function start() {
+    if (started) return;
+    started = true;
+    ScrollTrigger.refresh();
+    setTimeout(() => {
+      loader.classList.add('done');
+      if (lenis) lenis.start();
+      // S1: the name types in word by word
+      const to = { opacity: 1, y: 0, duration: 0.6, stagger: 0.18, ease: 'power2.out', delay: 0.3 };
+      if (!RM) to.filter = 'blur(0px)';
+      gsap.to($$('.intro-h .w'), to);
+      document.documentElement.classList.add('loaded'); // CSS fades the scroll hint in
+    }, 250);
+  }
+  // never trap the visitor behind the loader
+  setTimeout(start, 8000);
+})();
