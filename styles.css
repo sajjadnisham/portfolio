@@ -135,6 +135,25 @@ html.lenis, html.lenis body { height: auto; }
   transform: translateX(-120%);
 }
 
+/* Mask the character pulls out of his pocket (box on the 941×1672 canvas: 718,942 68×62) */
+.mask-item {
+  position: absolute; left: 76.302%; top: 56.340%; width: 7.226%; height: 3.708%;
+  will-change: transform, opacity;
+}
+/* Files he catches (lands on the clipboard in the page-5 pose, ~810,1130, tilted 16°) */
+.files {
+  position: absolute; left: 83.4%; top: 63.7%; width: 5.31%; height: 7.78%;
+  will-change: transform, opacity;
+}
+.files svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 3px 4px rgba(0,0,0,.5)); }
+
+/* The seated character's lower edge is cut by the desk; --sf softens it while he falls */
+.sitter {
+  --sf: 0%;
+  -webkit-mask-image: linear-gradient(#000 calc(59.4% - var(--sf)), transparent 59.4%);
+          mask-image: linear-gradient(#000 calc(59.4% - var(--sf)), transparent 59.4%);
+}
+
 /* ---------- Sky / plane ---------- */
 .sky { position: absolute; inset: 0; pointer-events: none; }
 .flight {
@@ -143,7 +162,15 @@ html.lenis, html.lenis body { height: auto; }
   width: var(--fw); aspect-ratio: 675 / 565;
   left: calc(50% - var(--fw) / 2); top: 21%;
 }
-.cloud, .plane { position: absolute; will-change: transform, opacity; }
+.craft { position: absolute; inset: 0; will-change: transform, opacity; }
+.cloud, .plane, .pilot { position: absolute; will-change: transform, opacity; }
+/* pilot box inside the flight frame (plane.webp 254,4 224×237, plane at 1,91) */
+.pilot {
+  left: 37.78%; top: 16.81%; width: 33.19%; height: auto;
+  --pf: 100%;
+  -webkit-mask-image: linear-gradient(#000 var(--pf), transparent calc(var(--pf) + 26%));
+          mask-image: linear-gradient(#000 var(--pf), transparent calc(var(--pf) + 26%));
+}
 .cloud img, .plane img { width: 100%; height: auto; }
 .c1 { left: 9.6%;  top: 1.2%;  width: 31.9%; }
 .c2 { left: 74.4%; top: 13.1%; width: 19.3%; }

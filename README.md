@@ -31,11 +31,11 @@ The links are in `index.html`, in the `SOCIAL LINKS` block of the Connect scene:
 | --- | --- |
 | 0 | **Intro**: "I am Nisham Sajjad," types in word by word |
 | 0.1 | **Portrait**: close-up slides in from the right, 8-years line and divider draw in |
-| 1.7 | **Mission Hospital**: portrait shrinks into the full-body character, hospital fades in (grain + vignette) |
-| 3.4 | **COVID**: surgical mask slides up onto his face |
-| 5.0 | **NABH**: clipboard pose, "(NABH)" appears letter by letter with a shine sweep across the sign |
-| 7.0 | **Maldives**: hospital fades to black, plane flies in with parallax clouds and a spinning propeller, then exits top right |
-| 9.6 | **NURF Pharmacy, IGMH**: IGMH fades in, desk slides up, character drops into the chair with a bounce |
+| 1.7 | **Mission Hospital**: he turns away, walks back into the hospital as a rim-lit silhouette, then turns round to face us |
+| 3.7 | **COVID**: pulls the mask out of his pocket and presses it onto his face |
+| 5.1 | **NABH**: a file is tossed in and he catches it; "(NABH)" appears letter by letter with a shine sweep |
+| 7.1 | **Maldives**: plane flies in with parallax clouds and a spinning propeller |
+| 8.95 | **NURF Pharmacy, IGMH**: he crouches, jumps out (the plane flies on without him), falls as IGMH rises into view, and lands in his chair; the chair rocks and he settles back |
 | 11.6 | **Responsibilities**: chair swivels, ticker scrolls through the 7 duties |
 | 15.2 | **Connect**: everything lifts away, round portrait, orbit draws, six social icons pop in |
 
@@ -45,8 +45,9 @@ The beats are timeline units in `script.js`. Each beat is 0.75 viewport heights 
 
 All images live in `assets/img/`. The storyboard pages were flat images, so `tools/extract_assets.py` cut them into layers:
 
-- **Stage layers** keep the storyboard's **941×1672 canvas** so they stack exactly: `portrait`, `hospital`, `hospital-blur`, `char-stand`, `char-mask`, `char-clipboard`, `igmh`, `desk`, `seated`.
-- **Free layers**: `plane`, `cloud-1..3`, `nabh-word`, `avatar`.
+- **Stage layers** keep the storyboard's **941×1672 canvas** so they stack exactly: `portrait`, `hospital`, `hospital-blur`, `char-stand`, `char-mask`, `char-clipboard`, `igmh`, `chair`, `sitter`, `desk`.
+- **Free layers**: `plane-empty`, `pilot`, `mask-item`, `cloud-1..3`, `nabh-word`, `avatar`. The clipboard he catches is an inline SVG.
+- `tools/extract_sprites.py` (second pass) makes the portrait with coat, the mask, the pilot and empty plane, and splits chair / character / laptop. `plane.webp` and `seated.webp` are its inputs and aren't loaded by the page.
 - The backgrounds had the character and baked-in text painted out, which is why the building plates are clean.
 
 **Swapping art:** if the illustrator delivers real separate layers (e.g. an empty chair, or a character without the laptop), export them on the same 941×1672 canvas with the same file names and they drop straight in. To re-cut from a new storyboard PDF:
@@ -54,7 +55,10 @@ All images live in `assets/img/`. The storyboard pages were flat images, so `too
 ```bash
 pip install pymupdf pillow opencv-python-headless "rembg[cpu]" torch simple-lama-inpainting
 python tools/extract_assets.py path/to/portfolio.pdf
+python tools/extract_sprites.py path/to/portfolio.pdf
 ```
+
+**For fully hand-animated acting** (a real walk cycle seen from behind, his hand lifting the mask, a full-body jump), ask the illustrator for short frame sequences of those poses. Each beat in `script.js` is commented, so frames can be swapped in there.
 
 ## Layout
 
