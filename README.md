@@ -17,9 +17,13 @@ Any static server works. Opening `index.html` straight from disk also works in m
 
 Upload the folder as-is to Netlify, Vercel, or GitHub Pages. For GitHub Pages, go to Settings → Pages → Deploy from branch → `/ (root)`.
 
+## Live site
+
+With GitHub Pages enabled on `main`, the site is served at https://sajjadnisham.github.io/portfolio/. The link-preview tags in `index.html` already point there. Update them if you move to a custom domain.
+
 ## Social links
 
-The links are in `index.html`, in the `SOCIAL LINKS` block of the Connect scene: Instagram, X, LinkedIn, Gmail, WhatsApp (+960 923 9234) and Facebook. Once the site is deployed, change the `og:image` meta tag to an absolute URL so link previews show the image.
+The links are in `index.html`, in the `SOCIAL LINKS` block of the Connect scene: Instagram, X, LinkedIn, Gmail, WhatsApp (+960 923 9234) and Facebook.
 
 ## The story (one pinned timeline)
 
