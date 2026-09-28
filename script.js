@@ -91,6 +91,7 @@
   const word = $('.nabh-word');
   const shine = $('.sign-glow span');
 
+  const walk = $$('.walk');             // back-view walk frames
   const hero = $('.hero');              // acting: walk scale / bob / sway / turn
   const poseStand = $('.pose-stand');
   const legL = $('.leg-l');
@@ -140,10 +141,22 @@
   gsap.set(word, { clipPath: 'inset(0% 100% 0% 0%)' });
   gsap.set(portraitWrap, { xPercent: 25 * M, scale: 1 + 0.08 * M, transformOrigin: '86% 57%' });
   gsap.set(portrait, { transformOrigin: '86% 57%' });                       // face centre
-  // Walk-back pivot: at scale 2.2 his head sits where the portrait's head
-  // was; at scale 1 he stands on his mark.
-  gsap.set(hero, { opacity: 0, transformOrigin: '69% 54.6%', scaleX: RM ? 1 : 0.09, scaleY: 1 + 1.2 * M });
-  if (!RM) gsap.set(hero, { filter: 'brightness(0.06) drop-shadow(0 0 2px rgba(255,255,255,.6))' });
+  // Where the figure stands in each frame (canvas px): feet centre, feet line, height.
+  // From tools/walk-frames.json; HERO is the page-3 standing pose.
+  const WALK = [
+    { cx: 771, feet: 1621, h: 953 },   // 1 standing close, back to us
+    { cx: 754, feet: 1580, h: 783 },   // 2 walking away
+    { cx: 697, feet: 1562, h: 639 },   // 3
+    { cx: 683, feet: 1509, h: 558 },   // 4 furthest
+    { cx: 704, feet: 1550, h: 615 },   // 5 looking back over his shoulder
+  ];
+  const HERO = { cx: 700, feet: 1618, h: 758 };
+  const origin = (f) => `${f.cx / 9.41}% ${f.feet / 16.72}%`;
+  // transform that makes figure `a` stand exactly where figure `b` stands
+  const place = (a, b) => ({ scale: b.h / a.h, xPercent: (b.cx - a.cx) / 9.41, yPercent: (b.feet - a.feet) / 16.72 });
+  walk.forEach((el, i) => gsap.set(el, { opacity: 0, transformOrigin: origin(WALK[i]) }));
+  gsap.set(walk[4], place(WALK[4], WALK[3]));                               // looks back from the far spot
+  gsap.set(hero, { opacity: 0, transformOrigin: origin(HERO) });
   gsap.set(legL, { transformOrigin: '70.67% 77.15%' });                     // hips (665,1290)
   gsap.set(legR, { transformOrigin: '79.17% 77.15%' });                     //      (745,1290)
   gsap.set(upper, { transformOrigin: '75% 78%' });                          // waist
@@ -181,43 +194,62 @@
 
   act.addLabel('start', 0);
 
-  /* --- S3 · turns away, walks into the hospital, turns back --- */
+  /* --- S3 · turns away, walks into the hospital, looks back, returns --- */
   if (RM) {
     act.to(portrait, { opacity: 0, duration: 0.3 }, 0);
     act.to(hero, { opacity: 1, duration: 0.3 }, 0.3);
   } else {
-    // turns his back to us: the close-up squashes edge-on and falls into shadow
-    act.to(portrait, { scaleX: 0.04, xPercent: -2, filter: 'brightness(0.3)', duration: 0.35, ease: 'power2.in' }, 0);
-    act.set(portrait, { opacity: 0 }, 0.35);
-    act.set(hero, { opacity: 1 }, 0.35);
-    act.to(hero, { scaleX: 2.2, duration: 0.25, ease: 'power2.out' }, 0.35);
+    // turns his back to us: the close-up squashes edge-on, the back view opens out
+    act.to(portrait, { scaleX: 0.04, xPercent: -2, filter: 'brightness(0.3)', duration: 0.3, ease: 'power2.in' }, 0);
+    act.set(portrait, { opacity: 0 }, 0.3);
+    act.set(walk[0], { opacity: 1, scaleX: 0.08 }, 0.3);
+    act.to(walk[0], { scaleX: 1, duration: 0.24, ease: 'power2.out' }, 0.3);
 
-    // walks away: perspective shrink (fast near camera, slower far away)
-    const W0 = 0.6, STEP = 0.46, STEPS = 4;
-    act.to(hero, { scaleX: 1, scaleY: 1, duration: STEP * STEPS, ease: 'power1.out' }, W0);
+    // walks away: each drawn frame glides toward the next frame's spot, then hands over
+    let t = 0.8;
+    const FD = 0.5;
+    for (let i = 0; i < 3; i++) {
+      act.to(walk[i], { ...place(WALK[i], WALK[i + 1]), duration: FD, ease: 'none' }, t);
+      act.to(walk[i], { y: -5, duration: FD / 2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, t);   // step bob
+      act.set(walk[i], { opacity: 0 }, t + FD);
+      act.set(walk[i + 1], { opacity: 1 }, t + FD);
+      t += FD;
+    }
+    // stops, then looks back over his shoulder
+    act.to(walk[3], { y: 2, duration: 0.12, yoyo: true, repeat: 1, ease: 'sine.inOut' }, t);
+    act.set(walk[3], { opacity: 0 }, t + 0.3);
+    act.set(walk[4], { opacity: 1 }, t + 0.3);
+    t += 1.1;
+
+    // turns round to face us…
+    const far = place(HERO, WALK[3]);
+    act.to(walk[4], { scaleX: 0.05 * WALK[3].h / WALK[4].h, duration: 0.15, ease: 'power2.in' }, t);
+    act.set(walk[4], { opacity: 0 }, t + 0.15);
+    act.set(hero, { opacity: 1, scaleX: far.scale * 0.05, scaleY: far.scale, xPercent: far.xPercent, yPercent: far.yPercent }, t + 0.15);
+    act.to(hero, { scaleX: far.scale, duration: 0.24, ease: 'back.out(1.8)' }, t + 0.15);
+    t += 0.55;
+
+    // …and walks back toward us onto his mark (the puppet rig: legs swing from the hips)
+    const STEP = 0.46, STEPS = 3;
+    act.to(hero, { scaleX: 1, scaleY: 1, xPercent: 0, yPercent: 0, duration: STEP * STEPS, ease: 'power1.in' }, t);
     for (let i = 0; i < STEPS; i++) {
-      const t = W0 + i * STEP;
+      const at = t + i * STEP;
       const lead = i % 2 ? legR : legL;       // leg swinging forward
       const back = i % 2 ? legL : legR;
       const s = i % 2 ? -1 : 1;
-      act.to(lead, { rotation: 9 * s, duration: STEP, ease: 'sine.inOut' }, t);
-      act.to(back, { rotation: -7 * s, duration: STEP, ease: 'sine.inOut' }, t);
+      act.to(lead, { rotation: 9 * s, duration: STEP, ease: 'sine.inOut' }, at);
+      act.to(back, { rotation: -7 * s, duration: STEP, ease: 'sine.inOut' }, at);
       // the swinging leg lifts and bends a little mid-stride
-      act.to(lead, { yPercent: -0.9, scaleY: 0.965, duration: STEP / 2, yoyo: true, repeat: 1, ease: 'sine.out' }, t);
+      act.to(lead, { yPercent: -0.9, scaleY: 0.965, duration: STEP / 2, yoyo: true, repeat: 1, ease: 'sine.out' }, at);
       // body rises over the planted leg, dips at each footfall; weight shifts side to side
-      act.to(hero, { yPercent: -0.8, duration: STEP / 2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, t);
-      act.to(hero, { rotation: 1.1 * s, duration: STEP, ease: 'sine.inOut' }, t);
-      act.to(upper, { rotation: -0.9 * s, duration: STEP, ease: 'sine.inOut' }, t);   // shoulders counter-swing
+      act.to(hero, { y: -6, duration: STEP / 2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, at);
+      act.to(hero, { rotation: 1.1 * s, duration: STEP, ease: 'sine.inOut' }, at);
+      act.to(upper, { rotation: -0.9 * s, duration: STEP, ease: 'sine.inOut' }, at);   // shoulders counter-swing
     }
-    const stop = W0 + STEP * STEPS;
+    const stop = t + STEP * STEPS;
     act.to([legL, legR, hero, upper], { rotation: 0, duration: 0.3, ease: 'sine.out' }, stop);
-
-    // turns round to face us and steps into the light
-    act.to(hero, { scaleX: 0.05, duration: 0.14, ease: 'power2.in' }, stop + 0.25);
-    act.set(hero, { filter: 'none' }, stop + 0.39);
-    act.to(hero, { scaleX: 1, duration: 0.24, ease: 'back.out(1.8)' }, stop + 0.39);
-    act.to(hero, { yPercent: 0.4, duration: 0.12, yoyo: true, repeat: 1, ease: 'sine.inOut' }, stop + 0.6);
-    act.to(legL, { rotation: -3, duration: 0.2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, stop + 0.62); // shifts his stance
+    act.to(hero, { y: 4, duration: 0.12, yoyo: true, repeat: 1, ease: 'sine.inOut' }, stop);              // settles
+    act.to(legL, { rotation: -3, duration: 0.2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, stop + 0.3); // shifts his stance
   }
   act.addLabel('hosp', '+=0.15');
 

@@ -40,7 +40,7 @@ There are two timelines in `script.js`:
 | --- | --- | --- |
 | 0 | Intro | "I am Nisham Sajjad," types in word by word |
 | 0.1 | Portrait | close-up slides in, 8-years line draws in |
-| 1.75 | Mission Hospital | turns away, walks into the hospital as a rim-lit silhouette with his legs stepping, turns round, settles |
+| 1.75 | Mission Hospital | turns away, walks into the hospital (drawn back-view frames), looks back over his shoulder, turns round and walks back onto his mark (leg rig), settles |
 | 3.7 | COVID | leans to his pocket, the mask arcs up onto his face, small nod |
 | 5.1 | NABH | a file is tossed in on an arc, he catches it; "(NABH)" letter reveal + shine |
 | 7.1 | Maldives | plane flies in with parallax clouds and a spinning propeller |
@@ -56,6 +56,7 @@ All images live in `assets/img/`. The storyboard pages were flat images, so `too
 
 - **Stage layers** keep the storyboard's **941×1672 canvas** so they stack exactly: `portrait`, `hospital`, `hospital-blur`, `char-stand`, `char-mask`, `char-clipboard`, `igmh`, `chair`, `sitter`, `desk`.
 - **Free layers**: `plane-empty`, `pilot`, `mask-item`, `cloud-1..3`, `nabh-word`, `avatar`. The clipboard he catches is an inline SVG.
+- `tools/extract_walk.py` cuts the five back-view walk frames (`tools/source/walk-*.jpg`) into `walk-1..5.webp`, aligned to the stage.
 - `tools/extract_rig.py` cuts the standing character into a puppet (upper body + two legs with hip joints) for the walk.
 - `tools/extract_sprites.py` (second pass) makes the portrait with coat, the mask, the pilot and empty plane, and splits chair / character / laptop. `plane.webp` and `seated.webp` are its inputs and aren't loaded by the page.
 - The backgrounds had the character and baked-in text painted out, which is why the building plates are clean.
@@ -67,6 +68,7 @@ pip install pymupdf pillow opencv-python-headless "rembg[cpu]" torch simple-lama
 python tools/extract_assets.py path/to/portfolio.pdf
 python tools/extract_sprites.py path/to/portfolio.pdf
 python tools/extract_rig.py
+python tools/extract_walk.py
 ```
 
 **For fully hand-animated acting** (a real walk cycle seen from behind, his hand lifting the mask, a full-body jump), ask the illustrator for short frame sequences of those poses. Each beat in `script.js` is commented, so frames can be swapped in there.
