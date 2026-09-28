@@ -17,13 +17,9 @@ Any static server works. Opening `index.html` straight from disk also works in m
 
 Upload the folder as-is to Netlify, Vercel, or GitHub Pages. For GitHub Pages, go to Settings → Pages → Deploy from branch → `/ (root)`.
 
-## Things to replace
+## Social links
 
-| What | Where |
-| --- | --- |
-| Instagram / X / LinkedIn / Facebook usernames | `index.html`, search for `USERNAME` |
-| WhatsApp number | `index.html`, `https://wa.me/960XXXXXXX` (country code + number, digits only) |
-| Social preview image URL | `index.html` `og:image`. Use an absolute URL once deployed |
+The links are in `index.html`, in the `SOCIAL LINKS` block of the Connect scene: Instagram, X, LinkedIn, Gmail, WhatsApp (+960 923 9234) and Facebook. Once the site is deployed, change the `og:image` meta tag to an absolute URL so link previews show the image.
 
 ## The story (one pinned timeline)
 
