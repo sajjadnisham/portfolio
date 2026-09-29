@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 175 155">
+  <!-- "(NABH)" on the Mission Hospital sign: same box as the storyboard patch
+       (505,675)-(680,830); skewed to the sign's slant, verticals stay vertical -->
+  <g transform="translate(28 142) skewY(-20.9)">
+    <text x="0" y="0" textLength="128" lengthAdjust="spacingAndGlyphs"
+          font-family="'Helvetica Neue', Helvetica, Arial, 'DejaVu Sans', sans-serif"
+          font-size="44" font-weight="600" fill="#c8c8c8">(NABH)</text>
+  </g>
+</svg>
