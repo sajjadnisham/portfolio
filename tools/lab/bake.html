@@ -9,7 +9,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 const CLIPS = {
   idle: 'Idle', walk: 'Walking', turnWalk: 'Catwalk Twist R To Walk 180', wave: 'Waving',
-  pilot: 'Piloting', sit: 'Sitting', jump: 'Jumping', fall: 'Jumping Down', land: 'Hard Landing',
+  pilot: 'Piloting', sit: 'Sitting', jump: 'Jumping', fall: 'Jumping Down', land: 'Landing',
+  standToSit: 'Stand To Sit', standUp: 'Stand Up', typing: 'Type To Sit', wave2: 'Waving (1)',
 };
 const av = (await new GLTFLoader().loadAsync('/assets/3d/nisham.glb')).scene;
 const bones = new Set(); av.traverse(o => { if (o.isBone) bones.add(o.name); });

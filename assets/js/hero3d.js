@@ -111,6 +111,12 @@ async function boot() {
     });
   }
 
+  /* ---------- face: blink + smile (morph targets built from the head mesh) ---------- */
+  const { buildFace, blinker } = await import(`./face.js?v=${V}`);
+  const body = avatar.getObjectByName('avaturn_body');
+  const face = body ? buildFace(body) : { set() {} };
+  const blink = blinker();
+
   /* ---------- clips ---------- */
   const mixer = new THREE.AnimationMixer(avatar);
   const Y180 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
@@ -158,6 +164,7 @@ async function boot() {
   const only = (c, keep, name) => new THREE.AnimationClip(name, c.duration, c.tracks.filter((t) => keep(t.name)));
   addAction('pilotL', only(A.pilot.getClip(), (n) => !RIGHT_ARM.test(n), 'pilotL'));
   addAction('waveR', only(A.wave.getClip(), (n) => RIGHT_ARM.test(n), 'waveR'));
+  addAction('idleL', only(A.idle.getClip(), (n) => !RIGHT_ARM.test(n), 'idleL'));   // standing, right arm free to wave
   addAction('walkB', makeClip('walk', true));           // walking away from camera
 
   const rootAt = (key, t) => {
@@ -176,6 +183,8 @@ async function boot() {
   const walkDur = moves.clips.walk.d;
   const walkStride = (() => { const c = root.walk; return c[c.length - 1][2] - c[0][2]; })();   // metres per cycle
   const walkSpeed = walkStride / walkDur;
+  // Scale the walk-away so the turn back ends exactly on his mark, whatever the
+  // avatar's proportions (the clips' travel scales with leg length).
 
   /* ---------- props: surgical mask + clipboard ---------- */
   const mask = new THREE.Group();
@@ -254,6 +263,11 @@ async function boot() {
   const dMark = depthForFeet(camH, 1613);
   const MARK = at(camH, 713, 1613, dMark); MARK.y = 0;
   const P0 = new THREE.Vector3((880 - 470.5) * 1.95 / 2297, 0, -1.95);       // close-up, right edge
+  const WALK_K = (() => {
+    const need = MARK.z - P0.z - rootAt('turnWalk', 99)[1] - rootAt('turnWalkB', 99)[1];
+    const natural = -walkSpeed * (S3D.waEnd - S3D.waStart);
+    return THREE.MathUtils.clamp(need / natural, 0.8, 1.25);
+  })();
   // IGMH desk: horizon at his eye line (row 760), 560 px per metre at the chair.
   const camD = paintedCamera(941, 1672, 2297, 760, 1.2);
   const dDesk = 2297 / 560;
@@ -358,6 +372,14 @@ async function boot() {
   /* ---------- per-frame: state → pose ---------- */
   const clock = new THREE.Clock();
   let tClock = 0;
+  // typing: the short clip ping-pongs gently (a straight loop would snap at the seam)
+  let typeT = 0;
+  const typeDur = moves.clips.typing.d;
+  const typeClock = (dt) => { typeT += dt * 0.8; const k = typeT % (2 * typeDur); return k < typeDur ? k : 2 * typeDur - k; };
+  const FRONT = -(root.standToSit ? root.standToSit[root.standToSit.length - 1][2] - root.standToSit[0][2] : -0.44);   // ~0.44 m
+  const UP_Z = rootAt('standUp', 2.3)[1];      // where script.js stops the Stand Up clip
+  const hipsAt = (k, i) => moves.clips[k].tracks.find((t) => t.n === 'Hips.position').v[i * 3 + 1];
+  const SEAT_DIFF = hipsAt('standUp', 0) - hipsAt('typing', 0);                // ~0.2 m
   const setAct = (name, time, weight) => { const a = A[name]; a.time = time; a.weight = weight; };
 
   function pose(dt = 0) {
@@ -387,7 +409,7 @@ async function boot() {
 
       const [rx1, rz1] = rootAt('turnWalk', s.tTW);
       const [rx2, rz2] = rootAt('turnWalkB', s.tTB);
-      const walked = -walkSpeed * Math.max(0, s.tWA - s.waStart);   // walking away (−z), after the turn's own travel
+      const walked = -walkSpeed * WALK_K * Math.max(0, s.tWA - s.waStart);   // walking away (−z), after the turn's own travel
       rig.position.set(
         THREE.MathUtils.lerp(P0.x, MARK.x, s.drift) + (s.tTW > 0 ? rx1 : 0) + (s.tTB > 0 ? rx2 : 0),
         0,
@@ -410,12 +432,32 @@ async function boot() {
       rig.scale.setScalar(1);
       clip.constant = -RIM_Y;                         // nothing below the cockpit rim: legs appear as they clear it
     } else {
-      /* IGMH: falls in from above and lands in his chair. */
-      setAct('fall', s.tF, s.wF);
-      setAct('sit', tClock % A.sit.getClip().duration, 1 - s.wF);
-      rig.position.set(SEAT.x, s.gyD, SEAT.z);
-      const swivel = (gsap.getProperty(el.chair, 'rotationY') || 0) * Math.PI / 180;
-      rig.rotation.set(0, swivel, THREE.MathUtils.degToRad(gsap.getProperty(el.chair, 'rotation') || 0) * 0.6);
+      /* IGMH: drops in from above and lands on his feet in front of the chair,
+         sits back into it, types; later stands up and waves goodbye. */
+      const typeT = typeClock(dt);
+      setAct('land', s.tLand, s.wLand);
+      setAct('standToSit', s.tSTS, s.wSTS);
+      setAct('typing', typeT, s.wType);
+      setAct('standUp', s.tUp, s.wUp);
+      // goodbye: standing idle with the right hand up, waving (the same wave as in the plane)
+      setAct('idleL', tClock % A.idle.getClip().duration, s.wBye);
+      setAct('waveR', tClock % A.wave.getClip().duration, s.wBye);
+      // travel from each clip's root curve, blended by weight; he lands FRONT
+      // in front of the seat and Stand To Sit carries him back into it
+      const [, zL] = rootAt('land', s.tLand);
+      const [, zS] = rootAt('standToSit', s.tSTS);
+      const [, zU] = rootAt('standUp', s.tUp);
+      const wSum = s.wLand + s.wSTS + s.wType + s.wUp + s.wBye || 1;
+      const z = (s.wLand * (FRONT + zL) + s.wSTS * (FRONT + zS) + s.wUp * zU + s.wBye * UP_Z) / wSum;
+      // Stand Up starts from a taller chair: lower him by the difference until he rises
+      const upDrop = -SEAT_DIFF * (1 - THREE.MathUtils.smoothstep(s.tUp, 1.0, 2.0)) * s.wUp / wSum;
+      rig.position.set(SEAT.x, s.gyD + upDrop, SEAT.z + z);
+      // the chair: swivels with him, and rocks as it takes his weight (3D only)
+      const seated = (s.wType + s.wSTS * THREE.MathUtils.smoothstep(s.tSTS, 1.3, 1.6) + s.wUp * (1 - THREE.MathUtils.smoothstep(s.tUp, 1.0, 1.6))) / wSum;
+      gsap.set(el.chair, { yPercent: 0.7 * s.bump, rotation: -1.2 * s.bump });
+      const swivel = (gsap.getProperty(el.chair, 'rotationY') || 0) * Math.PI / 180 * seated;
+      rig.rotation.set(0, swivel, THREE.MathUtils.degToRad(-1.2 * s.bump) * 0.6);
+      rig.position.y -= 0.006 * s.bump;
       clip.constant = -DESK_TOP_Y;                     // behind the desk
     }
 
@@ -430,6 +472,7 @@ async function boot() {
     avatar.updateMatrixWorld(true);
     if (f === 'H') placeMask(s);
     drapeCoat(dt, snap);
+    face.set(blink(tClock), s.smile);
   }
   let lastFrame = null;
 
@@ -601,7 +644,7 @@ async function boot() {
   renderer.setAnimationLoop(loop);          // paced by the display, same tick as GSAP
 
   document.documentElement.classList.add('has-3d');
-  window.__hero3d = { renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B };
+  window.__hero3d = { WALK_K, face, renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B };
 }
 
 /* ---------- helpers ---------- */
