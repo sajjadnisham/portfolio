@@ -86,13 +86,15 @@ async function boot() {
     m.needsUpdate = true;
   }
   // The coat's lower half: an open-fronted flared skirt from the waist to mid-thigh,
-  // carried by the hips so it follows his walk. Built in the bind (T) pose.
+  // carried by the hips. Each frame it is draped as cloth (see drapeCoat): it
+  // swings on a damped spring from his movement and wraps around his thighs.
+  const coat = {};
   {
     avatar.updateMatrixWorld(true);
     const hipsW = B.hips.getWorldPosition(new THREE.Vector3());
     // starts up under the jacket hem, so no dark band shows between the two
     const TOP = hipsW.y + 0.17, LEN = 0.47, GAP = 0.42;                    // metres; front opening (rad)
-    const g = new THREE.CylinderGeometry(0.2, 0.25, LEN, 40, 6, true, GAP / 2, Math.PI * 2 - GAP);
+    const g = new THREE.CylinderGeometry(0.2, 0.25, LEN, 72, 14, true, GAP / 2, Math.PI * 2 - GAP);
     g.scale(1.08, 1, 0.84);                                               // hips are wider than deep
     const skirt = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
       color: 0xf1f2f4, roughness: 0.82, side: THREE.DoubleSide, clippingPlanes: [clip],
@@ -102,6 +104,11 @@ async function boot() {
     skirt.position.set(hipsW.x, TOP - LEN / 2, hipsW.z);
     rig.add(skirt);
     B.hips.attach(skirt);                                                 // keep world pose, follow the hips
+    Object.assign(coat, {
+      skirt, LEN, pos: g.attributes.position, rest: Float32Array.from(g.attributes.position.array),
+      thighs: [[bone('LeftUpLeg'), bone('LeftLeg')], [bone('RightUpLeg'), bone('RightLeg')]],
+      off: new THREE.Vector3(), vel: new THREE.Vector3(), lastHips: null,
+    });
   }
 
   /* ---------- clips ---------- */
@@ -277,12 +284,14 @@ async function boot() {
     if (f === 'H') SC.H.add(shadow);
     sizeCanvas();
   }
+  // 1.5× is sharp and keeps the frame rate high (smoother than 2–3× native);
+  // adapt() drops to 1× on devices that can't keep up
+  const DPR_MAX = 1.5;
+  let dprCap = DPR_MAX;
   function sizeCanvas() {
     const box = hosts[frame];
     const w = box.clientWidth, h = box.clientHeight;
-    // phones: 1.5× is sharp and keeps the frame rate high (smoother than 2–3× native)
-    const dpr = Math.min(window.devicePixelRatio || 1, w < 600 ? 1.5 : 1.5);
-    renderer.setPixelRatio(dpr);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
     renderer.setSize(w, h, false);
   }
   addEventListener('resize', () => frame && sizeCanvas());
@@ -351,7 +360,7 @@ async function boot() {
   let tClock = 0;
   const setAct = (name, time, weight) => { const a = A[name]; a.time = time; a.weight = weight; };
 
-  function pose() {
+  function pose(dt = 0) {
     const s = S3D;
     const scrollT = tl.time();
     const actT = act.time();
@@ -414,7 +423,99 @@ async function boot() {
     avatar.updateMatrixWorld(true);
     rig.updateMatrixWorld(true);
 
+    const snap = f !== lastFrame || dt <= 0 || dt > 0.25;   // new scene / first frame / resumed tab
+    lastFrame = f;
     if (f === 'H') handsHospital(s);
+    smoothPose(dt, snap);
+    avatar.updateMatrixWorld(true);
+    if (f === 'H') placeMask(s);
+    drapeCoat(dt, snap);
+  }
+  let lastFrame = null;
+
+  /* Pose smoothing: every bone eases toward the pose the clips and IK ask for
+     (critically damped, ~45 ms). It removes pops at blends, loop seams and
+     IK weight changes without making him feel laggy. */
+  const bones = [];
+  avatar.traverse((o) => { if (o.isBone) bones.push(o); });
+  const prevQ = new Float32Array(bones.length * 4);
+  const prevHips = new THREE.Vector3();
+  const _qsm = new THREE.Quaternion();
+  let havePrev = false;
+  function smoothPose(dt, snap) {
+    if (!snap && havePrev) {
+      const k = 1 - Math.exp(-dt / 0.045);
+      for (let i = 0; i < bones.length; i++) {
+        _qsm.fromArray(prevQ, i * 4).slerp(bones[i].quaternion, k);
+        bones[i].quaternion.copy(_qsm);
+      }
+      B.hips.position.lerpVectors(prevHips, B.hips.position, k);
+    }
+    for (let i = 0; i < bones.length; i++) bones[i].quaternion.toArray(prevQ, i * 4);
+    prevHips.copy(B.hips.position);
+    havePrev = true;
+  }
+
+  /* Cloth: the coat's skirt trails and swings on a damped spring driven by his
+     hips' movement, and is pushed out around his thighs so it drapes over them
+     (including when he sits). ~1000 vertices, updated every frame. */
+  const _cv = new THREE.Vector3(), _cd = new THREE.Vector3(), _ab = new THREE.Vector3(), _hp = new THREE.Vector3();
+  const _inv = new THREE.Matrix4();
+  const segA = [new THREE.Vector3(), new THREE.Vector3()], segB = [new THREE.Vector3(), new THREE.Vector3()];
+  function drapeCoat(dt, snap) {
+    const { skirt, pos, rest, LEN, thighs, off, vel } = coat;
+    B.hips.getWorldPosition(_hp);
+    if (snap || !coat.lastHips) {
+      coat.lastHips = _hp.clone(); off.set(0, 0, 0); vel.set(0, 0, 0);
+    } else if (dt > 0) {
+      // the hem trails behind his movement, then swings back and settles
+      const h = Math.min(dt, 1 / 30);
+      const vx = (_hp.x - coat.lastHips.x) / dt, vz = (_hp.z - coat.lastHips.z) / dt;
+      coat.lastHips.copy(_hp);
+      const tx = THREE.MathUtils.clamp(-vx * 0.06, -0.09, 0.09), tz = THREE.MathUtils.clamp(-vz * 0.06, -0.09, 0.09);
+      const K = 70, D = 10;
+      vel.x += (K * (tx - off.x) - D * vel.x) * h; vel.z += (K * (tz - off.z) - D * vel.z) * h;
+      off.x += vel.x * h; off.z += vel.z * h;
+    }
+    skirt.updateMatrixWorld(true);
+    const M = skirt.matrixWorld;
+    _inv.copy(M).invert();
+    for (let s = 0; s < 2; s++) { thighs[s][0].getWorldPosition(segA[s]); thighs[s][1].getWorldPosition(segB[s]); }
+    const half = LEN / 2, arr = pos.array;
+    for (let i = 0; i < arr.length; i += 3) {
+      _cv.set(rest[i], rest[i + 1], rest[i + 2]);
+      const w = Math.pow(THREE.MathUtils.clamp((half - _cv.y) / LEN, 0, 1), 1.6);   // free hem, pinned waist
+      _cv.applyMatrix4(M);
+      _cv.x += off.x * w; _cv.z += off.z * w;
+      for (let s = 0; s < 2; s++) {
+        _ab.subVectors(segB[s], segA[s]);
+        const t = THREE.MathUtils.clamp(_cd.subVectors(_cv, segA[s]).dot(_ab) / _ab.lengthSq(), 0, 1);
+        _cd.copy(segA[s]).addScaledVector(_ab, t);                 // closest point on the thigh
+        const r = THREE.MathUtils.lerp(0.108, 0.083, t) + 0.012;
+        _ab.subVectors(_cv, _cd);
+        const L = _ab.length();
+        if (L < r && L > 1e-5) _cv.copy(_cd).addScaledVector(_ab, r / L);
+      }
+      _cv.applyMatrix4(_inv);
+      arr[i] = _cv.x; arr[i + 1] = _cv.y; arr[i + 2] = _cv.z;
+    }
+    pos.needsUpdate = true;
+    skirt.geometry.computeVertexNormals();
+  }
+
+  // the mask travels in his (smoothed) fingers, then settles on his face
+  function placeMask(s) {
+    if (!(s.ms > 0 || s.wR > 0)) return;
+    const wrist = B.rHand.getWorldPosition(new THREE.Vector3());
+    const knuckle = B.rMid.getWorldPosition(new THREE.Vector3());
+    // held a little past the knuckles, just in front of the palm
+    const inHand = wrist.lerp(knuckle, 1.25).add(new THREE.Vector3(0, 0, 0.03).applyQuaternion(rig.quaternion));
+    // the arc's centre sits inside the head, so its surface lands on the face
+    const onFace = offsetFrom(B.head, 0, MASK_FIT.y, MASK_FIT.z);
+    mask.position.copy(lerpV(inHand, onFace, s.mc));
+    mask.quaternion.copy(rig.getWorldQuaternion(new THREE.Quaternion()));
+    mask.scale.setScalar(Math.max(0.001, s.ms));
+    mask.visible = true;
   }
 
   function handsHospital(s) {
@@ -439,18 +540,6 @@ async function boot() {
       const up = new THREE.Vector3(0, 1, -0.35).applyQuaternion(rig.quaternion).normalize();
       aimHand(B.rHand, B.rMid, up, s.wR * THREE.MathUtils.clamp(s.mp - 1, 0, 1));
       aimHand(B.lHand, B.lMid, up, s.wL);
-      avatar.updateMatrixWorld(true);
-      // the mask travels with his hand, then settles on his face
-      // held in his fingers: a little past the knuckles, just in front of the palm
-      const wrist = B.rHand.getWorldPosition(new THREE.Vector3());
-      const knuckle = B.rMid.getWorldPosition(new THREE.Vector3());
-      const inHand = wrist.lerp(knuckle, 1.25).add(new THREE.Vector3(0, 0, 0.13).applyQuaternion(rig.quaternion));
-      // the arc's centre sits inside the head, so its surface lands on the face
-      const onFace = offsetFrom(B.head, 0, MASK_FIT.y, MASK_FIT.z);
-      mask.position.copy(lerpV(inHand.add(new THREE.Vector3(0, 0, -0.1).applyQuaternion(rig.quaternion)), onFace, s.mc));
-      mask.quaternion.copy(rig.getWorldQuaternion(new THREE.Quaternion()));
-      mask.scale.setScalar(Math.max(0.001, s.ms));
-      mask.visible = true;
     }
 
     // clipboard: tossed in from the right, caught, held against his chest
@@ -476,15 +565,39 @@ async function boot() {
   /* ---------- loop ---------- */
   let running = true;
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) clock.getDelta(); });
+  // adaptive resolution: if the device can't hold ~45 fps, render at 1× until it can
+  let ft = 0, fn = 0, slow = 0, fast = 0;
+  function adapt(dt) {
+    ft += dt; fn++;
+    if (fn < 45) return;
+    const avg = ft / fn; ft = 0; fn = 0;
+    if (avg > 1 / 45) { fast = 0; if (++slow >= 2 && dprCap > 1) { dprCap = 1; sizeCanvas(); } }
+    else if (avg < 1 / 58) { slow = 0; if (++fast >= 6 && dprCap < DPR_MAX) { dprCap = DPR_MAX; sizeCanvas(); } }
+  }
   function loop() {
     if (!running) return;
-    tClock += Math.min(clock.getDelta(), 0.1);
-    pose();
+    const dt = Math.min(clock.getDelta(), 0.1);
+    tClock += dt;
+    pose(dt);
     const cam = frame === 'H' ? camH : frame === 'D' ? camD : camP;
     renderer.render(SC[frame], cam);
+    adapt(dt);
   }
+
+  // compile every scene's shaders and upload textures now, so the first
+  // switch to the plane or the office doesn't hitch
+  for (const [f, cam] of [['P', camP], ['D', camD], ['H', camH]]) {
+    SC[f].add(rig, mask, board);
+    renderer.compile(SC[f], cam);
+    SC[f].remove(rig, mask, board);
+  }
+  avatar.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) if (o.material[k]) renderer.initTexture(o.material[k]);
+  });
+
   useFrame('H');
-  pose();
+  pose(0);
   renderer.setAnimationLoop(loop);          // paced by the display, same tick as GSAP
 
   document.documentElement.classList.add('has-3d');
