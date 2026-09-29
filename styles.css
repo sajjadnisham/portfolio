@@ -138,6 +138,14 @@ html.lenis, html.lenis body { height: auto; }
           mask-image: linear-gradient(#000 calc(59.4% - var(--sf)), transparent 59.4%);
 }
 
+/* ---------- 3D avatar ---------- */
+.host { pointer-events: none; }
+.host-p { position: absolute; left: -40%; right: -40%; top: -120%; bottom: -60%; }  /* keep in sync with EXT in hero3d.js */
+.hero3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* once the 3D avatar is running, the illustrated stand-ins step aside */
+.has-3d .walk, .has-3d .hero, .has-3d .portrait, .has-3d .files,
+.has-3d .pilot, .has-3d .sitter-rig { visibility: hidden; }
+
 /* ---------- Sky / plane ---------- */
 .sky { position: absolute; inset: 0; pointer-events: none; }
 .flight {

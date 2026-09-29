@@ -36,19 +36,33 @@ There are two timelines in `script.js`:
 - **`tl` (scroll-linked):** scenes, backgrounds, camera framing and text follow the scroll position. Scrolling back up reverses them. Timeline units are "beats", and each beat is 0.75 viewport heights of scroll (`BEAT`).
 - **`act` (free-running):** the character's acting. When the scroll reaches a scene, he plays that moment at natural speed, and plays it backwards when you scroll up. So he moves freely instead of stuttering with your finger.
 
-| Scroll beat | Scene | What he does |
+| Scroll beat | Scene | What he does (3D) |
 | --- | --- | --- |
 | 0 | Intro | "I am Nisham Sajjad," types in word by word |
-| 0.1 | Portrait | close-up slides in, 8-years line draws in |
-| 1.75 | Mission Hospital | turns away, walks into the hospital (drawn back-view frames), looks back over his shoulder, turns round and walks back onto his mark (leg rig), settles |
-| 3.7 | COVID | pulls the mask from his pocket, lifts it, hooks it over his ears, lowers his hands (drawn frames) |
-| 5.1 | NABH | a file is tossed in on an arc, he catches it; "(NABH)" letter reveal + shine |
-| 7.1 | Maldives | plane flies in with parallax clouds and a spinning propeller |
-| 8.95 | NURF Pharmacy, IGMH | crouches, jumps out, the plane flies on, he falls as IGMH rises, lands in his chair (squash, rebound, the chair rocks), leans back |
-| 11.6 | Responsibilities | chair swivels with him, the duties ticker scrolls |
+| 0.1 | Portrait | 3D close-up slides in, idling; 8-years line draws in |
+| 1.75 | Mission Hospital | turns and walks away into the hospital, stops, turns back and walks onto his mark |
+| 3.7 | COVID | reaches into his pocket, lifts the mask to his face, hooks the loops over his ears, lowers his hands |
+| 5.1 | NABH | a clipboard is tossed in on an arc; he reaches, catches it and holds it to his chest; "(NABH)" letter reveal + shine |
+| 7.1 | Maldives | plane flies in; he pilots with one hand and waves with the other |
+| 8.95 | NURF Pharmacy, IGMH | crouches, leaps out of the cockpit (the plane flies on), falls as IGMH rises, lands in his chair (the chair rocks) |
+| 11.6 | Responsibilities | he swivels with the chair, the duties ticker scrolls |
 | 15.2 | Connect | everything lifts away, the social-link orbit draws in |
 
-Between moments he is never frozen: he breathes and shifts his weight, and the plane bobs.
+Between moments he is never frozen: idle, piloting and sitting loops keep running.
+
+## The 3D avatar
+
+`assets/js/hero3d.js` (three.js, vendored in `assets/vendor/three/`) renders Nisham's avatar into the illustrated scenes.
+
+- **Avatar:** `assets/3d/nisham.glb`, made with Avaturn and optimised (WebP textures, quantised mesh, 2.7 MB). The original export is in `tools/source/3d/avatar.glb`.
+- **Moves:** Mixamo clips (`tools/source/3d/*.fbx`) baked into `assets/3d/moves.json` by `node tools/bake-moves.js` (needs a static server on port 8765 and Playwright).
+- **One renderer, three places:** its canvas moves into the hospital scene, the cockpit, or between the office chair and the desk. The painted layers around it still cover him correctly (behind the desk and laptop, legs hidden in the fuselage).
+- **Matched perspective:** each painting gets a camera tuned to its horizon and eye height, so he stands on the painted road at the right size wherever he walks.
+- **Choreography:** his acting is tweened on the shared `act` timeline (the `S3D` object in `script.js`), so it stays in sync with the props and plays backwards when scrolling up.
+- **Hands:** the mask and the clipboard use a small two-bone IK solver for his arms.
+- **Fallback:** without WebGL, or if the 3D files fail to load within 15 s, the illustrated 2D character plays instead.
+- **Tuning:** placements are in `hero3d.js` (`MARK`, `P0`, `SEAT`, `COCKPIT`, `MASK_FIT`). Timings are in the `S3D` block of `script.js`.
+- **Changing the outfit:** export a new avatar from Avaturn, then run `gltf-transform webp`, `quantize` and `prune` on it, and save it as `assets/3d/nisham.glb`.
 
 ## Artwork
 
