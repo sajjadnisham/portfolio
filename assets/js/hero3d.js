@@ -51,7 +51,7 @@ async function boot() {
   const [gltf, moves, coatMap] = await Promise.all([
     new GLTFLoader().loadAsync(`assets/3d/nisham.glb?v=${V}`),
     fetch(`assets/3d/moves.json?v=${V}`).then((r) => { if (!r.ok) throw new Error('moves ' + r.status); return r.json(); }),
-    new THREE.TextureLoader().loadAsync(`assets/3d/coat.webp?v=${V}`),   // white coat over dark scrubs (tools/make_coat.py)
+    new THREE.TextureLoader().loadAsync(`assets/3d/coat.webp?v=${V}`),   // white shirt, charcoal trousers (tools/make_coat.py)
   ]);
 
   const avatar = gltf.scene;
@@ -74,7 +74,7 @@ async function boot() {
     mats.forEach((m) => { m.clippingPlanes = [clip]; });
   });
 
-  /* ---------- pharmacist's outfit: white coat over dark scrubs ---------- */
+  /* ---------- pharmacist's outfit: clean white shirt, charcoal trousers ---------- */
   const outfit = avatar.getObjectByName('avaturn_look_0');
   if (outfit) {
     coatMap.colorSpace = THREE.SRGBColorSpace;
@@ -85,32 +85,6 @@ async function boot() {
     if (m.normalScale) m.normalScale.setScalar(0.35);   // soften the denim weave into cotton
     m.needsUpdate = true;
   }
-  // The coat's lower half: an open-fronted flared skirt from the waist to mid-thigh,
-  // carried by the hips. Each frame it is draped as cloth (see drapeCoat): it
-  // swings on a damped spring from his movement and wraps around his thighs.
-  const coat = {};
-  {
-    avatar.updateMatrixWorld(true);
-    const hipsW = B.hips.getWorldPosition(new THREE.Vector3());
-    // starts up under the jacket hem, so no dark band shows between the two
-    const TOP = hipsW.y + 0.17, LEN = 0.47, GAP = 0.42;                    // metres; front opening (rad)
-    const g = new THREE.CylinderGeometry(0.2, 0.25, LEN, 72, 14, true, GAP / 2, Math.PI * 2 - GAP);
-    g.scale(1.08, 1, 0.84);                                               // hips are wider than deep
-    const skirt = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
-      color: 0xf1f2f4, roughness: 0.82, side: THREE.DoubleSide, clippingPlanes: [clip],
-    }));
-    skirt.name = 'coatSkirt';
-    skirt.frustumCulled = false;
-    skirt.position.set(hipsW.x, TOP - LEN / 2, hipsW.z);
-    rig.add(skirt);
-    B.hips.attach(skirt);                                                 // keep world pose, follow the hips
-    Object.assign(coat, {
-      skirt, LEN, pos: g.attributes.position, rest: Float32Array.from(g.attributes.position.array),
-      thighs: [[bone('LeftUpLeg'), bone('LeftLeg')], [bone('RightUpLeg'), bone('RightLeg')]],
-      off: new THREE.Vector3(), vel: new THREE.Vector3(), lastHips: null,
-    });
-  }
-
   /* ---------- face: blink + smile (morph targets built from the head mesh) ---------- */
   const { buildFace, blinker } = await import(`./face.js?v=${V}`);
   const body = avatar.getObjectByName('avaturn_body');
@@ -262,7 +236,7 @@ async function boot() {
   const camH = paintedCamera(941, 1672, 2297, 963, 1.84 * (1613 - 963) / 748);
   const dMark = depthForFeet(camH, 1613);
   const MARK = at(camH, 713, 1613, dMark); MARK.y = 0;
-  const P0 = new THREE.Vector3((880 - 470.5) * 1.95 / 2297, 0, -1.95);       // close-up, right edge
+  const P0 = new THREE.Vector3((650 - 470.5) * 3.2 / 2297, 0, -3.2);        // where he lands (opening), right of centre
   const WALK_K = (() => {
     const need = MARK.z - P0.z - rootAt('turnWalk', 99)[1] - rootAt('turnWalkB', 99)[1];
     const natural = -walkSpeed * (S3D.waEnd - S3D.waStart);
@@ -364,9 +338,13 @@ async function boot() {
     return out.add(v);
   }
   const lerpV = (a, b, k) => a.clone().lerp(b, k);
-  const piece = (p, pts) => {                       // piecewise path along stage points
-    const i = Math.min(Math.floor(p), pts.length - 2);
-    return lerpV(pts[i], pts[i + 1], THREE.MathUtils.clamp(p - i, 0, 1));
+  // A smooth hand path through waypoints (centripetal Catmull-Rom, so it
+  // doesn't overshoot): p = 0 … pts.length-1, one unit per waypoint. The hand
+  // never stops at a waypoint unless the timing in script.js makes it.
+  const _spline = new THREE.CatmullRomCurve3([], false, 'centripetal');
+  const along = (p, pts) => {
+    _spline.points = pts;
+    return _spline.getPoint(THREE.MathUtils.clamp(p / (pts.length - 1), 0, 1));
   };
 
   /* ---------- per-frame: state → pose ---------- */
@@ -399,9 +377,11 @@ async function boot() {
     board.visible = false;
 
     if (f === 'H') {
-      /* Mission Hospital: close-up → turn → walk away → turn back → mark,
-         then the mask and the clipboard. */
+      /* Mission Hospital: drops out of the sky into the close-up, lands →
+         turns → walks toward the hospital → turns back → mark, then the mask
+         and the clipboard. */
       const idleT = tClock % A.idle.getClip().duration;
+      setAct('land', s.tLandH, s.wLandH);
       setAct('idle', idleT, s.wIdle);
       setAct('turnWalk', s.tTW, s.wTW);
       setAct('walkB', s.tWA % walkDur, s.wWA);
@@ -412,16 +392,17 @@ async function boot() {
       const walked = -walkSpeed * WALK_K * Math.max(0, s.tWA - s.waStart);   // walking away (−z), after the turn's own travel
       rig.position.set(
         THREE.MathUtils.lerp(P0.x, MARK.x, s.drift) + (s.tTW > 0 ? rx1 : 0) + (s.tTB > 0 ? rx2 : 0),
-        0,
+        s.gyH,                                          // still falling in from above
         P0.z + (s.tTW > 0 ? rz1 : 0) + walked + (s.tTB > 0 ? rz2 : 0),
       );
       rig.position.z += s.recoil;
       rig.rotation.set(0, 0, 0);
       shadow.visible = true;
       shadow.position.set(rig.position.x, 0.003, rig.position.z);
-      // S2 slide-in comes from the scroll timeline
-      const slide = gsap.getProperty(el.portraitWrap, 'xPercent') || 0;
-      rig.position.x += slide / 100 * 941 * Math.abs(P0.z) / camH.userData.f;
+      // the shadow gathers under him as he comes down
+      const air = s.gyH + Math.max(0, (hipsAt('land', 0) - 1) * s.wLandH * (1 - THREE.MathUtils.smoothstep(s.tLandH, 0, 0.33)));
+      shadow.scale.setScalar(1 + air * 0.5);
+      shadow.material.opacity = 0.55 / (1 + air * 1.5);
     } else if (f === 'P') {
       /* In the cockpit: piloting and waving, then the jump. */
       setAct('pilotL', tClock % A.pilot.getClip().duration, 1 - s.wJ);
@@ -471,8 +452,9 @@ async function boot() {
     smoothPose(dt, snap);
     avatar.updateMatrixWorld(true);
     if (f === 'H') placeMask(s);
-    drapeCoat(dt, snap);
-    face.set(blink(tClock), s.smile);
+    // face: acted expressions + blinks + a little life in the brows
+    const life = 0.07 * Math.sin(tClock * 0.63) + 0.05 * Math.sin(tClock * 1.71 + 1.3);
+    face.set({ blink: Math.max(blink(tClock), 0.4 * s.squint), smile: s.smile, brow: s.brow + life, jaw: s.jaw });
   }
   let lastFrame = null;
 
@@ -499,53 +481,6 @@ async function boot() {
     havePrev = true;
   }
 
-  /* Cloth: the coat's skirt trails and swings on a damped spring driven by his
-     hips' movement, and is pushed out around his thighs so it drapes over them
-     (including when he sits). ~1000 vertices, updated every frame. */
-  const _cv = new THREE.Vector3(), _cd = new THREE.Vector3(), _ab = new THREE.Vector3(), _hp = new THREE.Vector3();
-  const _inv = new THREE.Matrix4();
-  const segA = [new THREE.Vector3(), new THREE.Vector3()], segB = [new THREE.Vector3(), new THREE.Vector3()];
-  function drapeCoat(dt, snap) {
-    const { skirt, pos, rest, LEN, thighs, off, vel } = coat;
-    B.hips.getWorldPosition(_hp);
-    if (snap || !coat.lastHips) {
-      coat.lastHips = _hp.clone(); off.set(0, 0, 0); vel.set(0, 0, 0);
-    } else if (dt > 0) {
-      // the hem trails behind his movement, then swings back and settles
-      const h = Math.min(dt, 1 / 30);
-      const vx = (_hp.x - coat.lastHips.x) / dt, vz = (_hp.z - coat.lastHips.z) / dt;
-      coat.lastHips.copy(_hp);
-      const tx = THREE.MathUtils.clamp(-vx * 0.06, -0.09, 0.09), tz = THREE.MathUtils.clamp(-vz * 0.06, -0.09, 0.09);
-      const K = 70, D = 10;
-      vel.x += (K * (tx - off.x) - D * vel.x) * h; vel.z += (K * (tz - off.z) - D * vel.z) * h;
-      off.x += vel.x * h; off.z += vel.z * h;
-    }
-    skirt.updateMatrixWorld(true);
-    const M = skirt.matrixWorld;
-    _inv.copy(M).invert();
-    for (let s = 0; s < 2; s++) { thighs[s][0].getWorldPosition(segA[s]); thighs[s][1].getWorldPosition(segB[s]); }
-    const half = LEN / 2, arr = pos.array;
-    for (let i = 0; i < arr.length; i += 3) {
-      _cv.set(rest[i], rest[i + 1], rest[i + 2]);
-      const w = Math.pow(THREE.MathUtils.clamp((half - _cv.y) / LEN, 0, 1), 1.6);   // free hem, pinned waist
-      _cv.applyMatrix4(M);
-      _cv.x += off.x * w; _cv.z += off.z * w;
-      for (let s = 0; s < 2; s++) {
-        _ab.subVectors(segB[s], segA[s]);
-        const t = THREE.MathUtils.clamp(_cd.subVectors(_cv, segA[s]).dot(_ab) / _ab.lengthSq(), 0, 1);
-        _cd.copy(segA[s]).addScaledVector(_ab, t);                 // closest point on the thigh
-        const r = THREE.MathUtils.lerp(0.108, 0.083, t) + 0.012;
-        _ab.subVectors(_cv, _cd);
-        const L = _ab.length();
-        if (L < r && L > 1e-5) _cv.copy(_cd).addScaledVector(_ab, r / L);
-      }
-      _cv.applyMatrix4(_inv);
-      arr[i] = _cv.x; arr[i + 1] = _cv.y; arr[i + 2] = _cv.z;
-    }
-    pos.needsUpdate = true;
-    skirt.geometry.computeVertexNormals();
-  }
-
   // the mask travels in his (smoothed) fingers, then settles on his face
   function placeMask(s) {
     if (!(s.ms > 0 || s.wR > 0)) return;
@@ -564,25 +499,48 @@ async function boot() {
   function handsHospital(s) {
     const poleR = offsetFrom(B.rArm, -0.5, -0.6, -0.3);
     const poleL = offsetFrom(B.lArm, 0.5, -0.6, -0.3);
+    const relaxR = offsetFrom(B.rArm, -0.4, -0.6, 0.0);          // elbow down and a little out
+    const relaxL = offsetFrom(B.lArm, 0.4, -0.6, 0.0);
 
-    // mask: pocket → in front of his chin → past the cheek → loops over the ears
-    if (s.ms > 0 || s.wR > 0) {
+    // mask: one continuous reach for each hand, like a person putting a mask on
+    //   right: rest → pocket (grabs it) → up past the chest → mask to the chin
+    //          → along the cheek → hooks the loop over the ear → down in front → rest
+    //   left:  rest → up in front of the body → cheek → other ear → down in front → rest
+    // (the low waypoints sit in front of the body, so the hands never pass
+    //  through a hands-on-hips pose)
+    if (s.ms > 0 || s.wR > 0 || s.wL > 0) {
+      const restR = B.rHand.getWorldPosition(new THREE.Vector3());   // where the idle has the hands
+      const restL = B.lHand.getWorldPosition(new THREE.Vector3());
       const pocket = offsetFrom(B.hips, -0.19, -0.08, 0.1);
-      // wrist targets: the hand is ~18 cm long, so wrists sit beside the jaw
-      // and the fingertips reach the ears
+      const liftR = offsetFrom(B.spine2, -0.13, -0.02, 0.32);
       const chin = offsetFrom(B.head, -0.04, -0.09, 0.2);
       const cheekR = offsetFrom(B.head, -0.14, -0.1, 0.1);
       const earR = offsetFrom(B.head, -0.13, -0.08, -0.01);
+      const jawR = offsetFrom(B.head, -0.13, -0.27, 0.15);          // in front of the shoulder on the way down
+      const dropR = offsetFrom(B.spine2, -0.15, -0.3, 0.27);
+      const bellyL = offsetFrom(B.spine2, 0.14, -0.3, 0.27);
+      const liftL = offsetFrom(B.spine2, 0.16, 0.0, 0.3);
+      const cheekL = offsetFrom(B.head, 0.15, -0.12, 0.12);
       const earL = offsetFrom(B.head, 0.13, -0.08, -0.01);
-      const rTarget = piece(s.mp, [pocket, pocket, chin, cheekR, earR]);
-      const poleRu = offsetFrom(B.rArm, -0.5, -0.5, 0.35);        // elbows down, out and forward
-      const poleLu = offsetFrom(B.lArm, 0.5, -0.5, 0.35);
-      ik(B.rArm, B.rFore, B.rHand, rTarget, s.mp > 1.5 ? poleRu : poleR, s.wR);
-      ik(B.lArm, B.lFore, B.lHand, earL, poleLu, s.wL);
-      // fingers point up and a little back, like hooking a loop behind the ear
+      const jawL = offsetFrom(B.head, 0.13, -0.27, 0.15);
+      const dropL = offsetFrom(B.spine2, 0.15, -0.3, 0.27);
+      // knots: rest 0 · pocket 1 · lift 1.5 · chin 2 · cheek 3 · ear 4 · jaw 5 · drop 6 · rest 7
+      const mp = s.mp < 1 ? s.mp : s.mp < 2 ? 1 + (s.mp - 1) * 2 : s.mp + 1;
+      const rTarget = along(mp, [restR, pocket, liftR, chin, cheekR, earR, jawR, dropR, restR]);
+      //        lp: rest 0 · belly 1 · chest 2 · cheek 3 · ear 4 · jaw 5 · drop 6 · rest 7
+      const lTarget = along(s.lp, [restL, bellyL, liftL, cheekL, earL, jawL, dropL, restL]);
+      // elbows: down at the pocket, lifting out to the side as the hands rise,
+      // and settling down again as soon as the hands leave the ears
+      const k = THREE.MathUtils.smoothstep(s.mp, 0.9, 2.2) * (1 - THREE.MathUtils.smoothstep(s.mp, 4.05, 4.9));
+      const poleRt = lerpV(s.mp < 3 ? poleR : relaxR, offsetFrom(B.rArm, -0.6, -0.35, 0.12), k);
+      const kl = THREE.MathUtils.smoothstep(s.lp, 1.2, 2.6) * (1 - THREE.MathUtils.smoothstep(s.lp, 4.05, 4.9));
+      const poleLt = lerpV(relaxL, offsetFrom(B.lArm, 0.6, -0.35, 0.12), kl);
+      ik(B.rArm, B.rFore, B.rHand, rTarget, poleRt, s.wR);
+      ik(B.lArm, B.lFore, B.lHand, lTarget, poleLt, s.wL);
+      // fingers point up and a little back near the face, like hooking a loop behind the ear
       const up = new THREE.Vector3(0, 1, -0.35).applyQuaternion(rig.quaternion).normalize();
-      aimHand(B.rHand, B.rMid, up, s.wR * THREE.MathUtils.clamp(s.mp - 1, 0, 1));
-      aimHand(B.lHand, B.lMid, up, s.wL);
+      aimHand(B.rHand, B.rMid, up, s.wR * THREE.MathUtils.smoothstep(s.mp, 1.4, 2.4) * (1 - THREE.MathUtils.smoothstep(s.mp, 4.1, 4.9)));
+      aimHand(B.lHand, B.lMid, up, s.wL * THREE.MathUtils.smoothstep(s.lp, 2.0, 3.2) * (1 - THREE.MathUtils.smoothstep(s.lp, 4.1, 4.9)));
     }
 
     // clipboard: tossed in from the right, caught, held against his chest

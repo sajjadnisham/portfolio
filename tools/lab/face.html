@@ -7,9 +7,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { buildFace } from '/assets/js/face.js';
 const q = new URLSearchParams(location.search);
-const states = (q.get('states') || '0,0|0.5,0|1,0|0,1|0,0.5').split('|').map((s) => s.split(',').map(Number));
+const states = (q.get('states') || '0,0,0,0|0,1,0,0|0,0,1,0|0,0,-1,0|0,0,1,1|0.35,0.3,-0.8,0.4').split('|').map((s) => s.split(',').map(Number));   // blink,smile,brow,jaw
 const Z = +(q.get('zoom') || 0.28), side = +(q.get('side') || 0);
-const cw = 360, ch = 400, W = cw * states.length;
+const cw = 300, ch = 400, W = cw * states.length;
 const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, ch);
 r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.setScissorTest(true); r.setClearColor(0x6a6a6a); document.body.appendChild(r.domElement);
 const av = (await new GLTFLoader().loadAsync('/assets/3d/nisham.glb')).scene;
@@ -19,10 +19,10 @@ const body = av.getObjectByName('avaturn_body');
 const face = buildFace(body);
 av.updateMatrixWorld(true);
 const head = av.getObjectByName('Head').getWorldPosition(new THREE.Vector3());
-states.forEach(([b, s], i) => {
-  face.set(b, s);
+states.forEach(([blink, smile, brow, jaw], i) => {
+  face.set({ blink, smile, brow, jaw });
   const cam = new THREE.PerspectiveCamera(30, cw / ch, 0.01, 10);
-  cam.position.set(head.x + side, head.y + 0.08, head.z + Z * 3.3); cam.lookAt(head.x, head.y + 0.08, head.z);
+  const cy = head.y + +(q.get('cy') || 0.08); cam.position.set(head.x + side, cy, head.z + Z * 3.3); cam.lookAt(head.x, cy, head.z);
   r.setViewport(i * cw, 0, cw, ch); r.setScissor(i * cw, 0, cw, ch); r.render(sc, cam);
 });
 const bb = new THREE.Box3().setFromBufferAttribute(body.geometry.attributes.position); window.__info = { bb: [bb.min.toArray(), bb.max.toArray()], mw: body.matrixWorld.elements, norm: body.geometry.attributes.position.normalized, arr: body.geometry.attributes.position.array.constructor.name, touched: face.touched, head: head.toArray(), bind: body.bindMatrix.elements, name: body.name };
