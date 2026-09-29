@@ -18,7 +18,7 @@
      5.1  S5  NABH                  catches the file, "(NABH)" reveal + shine
      7.1  S6  Flight to Maldives
      8.95 S7  NURF Pharmacy, IGMH   jumps out of the plane, falls into his chair
-    11.6  S8  Responsibilities      chair swivel + ticker
+    11.6  S8  Responsibilities      chair swivel; the duties appear and stay
     15.2  S9  Connect with me
    ========================================================= */
 (() => {
@@ -32,6 +32,8 @@
   const DESKTOP_Q = matchMedia('(min-width: 1200px), (min-width: 900px) and (min-aspect-ratio: 13/10)');
   const RATIO = 941 / 1672;        // storyboard canvas
   const M = RM ? 0 : 1;            // motion multiplier: reduced motion → fades only
+  // blur-to-sharp text is costly to repaint on phones; keep it for larger screens
+  const BLUR = !RM && matchMedia('(min-width: 769px)').matches;
   const BEAT = 0.75;               // viewport heights of scroll per timeline unit
 
   const $ = (s, r = document) => r.querySelector(s);
@@ -45,7 +47,7 @@
      and place it per layout:
        A  = Mission Hospital framing
        B  = IGMH desk framing
-       B2 = IGMH with room for the responsibilities ticker
+       B2 = IGMH with room for the responsibilities list
      --------------------------------------------------------- */
   const G = {};
   function measure() {
@@ -82,7 +84,6 @@
   const mald = $('.c-maldives');
   const nurf = $('.c-nurf');
   const ticker = $('.ticker');
-  const tickerList = $('.ticker ul');
   const items = $$('.ticker li');
 
   const setA = $('.set-a');
@@ -130,7 +131,7 @@
 
   /* ---------- Initial states ---------- */
   const hidden = { opacity: 0, y: 30 * M };
-  if (!RM) hidden.filter = 'blur(6px)';
+  if (BLUR) hidden.filter = 'blur(6px)';
   gsap.set($$('.copy .ln'), hidden);
   gsap.set($$('.intro-h .w'), hidden);
   gsap.set(lines(mald), { y: 60 * M });
@@ -182,8 +183,7 @@
   gsap.set(sitter, { '--sf': RM ? '0%' : '9%' });
   gsap.set(pilot, { transformOrigin: '33% 100%' });
   gsap.set(ticker, { opacity: 0, y: 20 * M });
-  gsap.set(items, { opacity: 0.25 });
-  gsap.set(items[0], { opacity: 1 });
+  gsap.set(items, { opacity: 0, x: -14 * M });
   gsap.set([avatar, ...icons], { opacity: 0, scale: 0 });
   gsap.set([label, foot], { opacity: 0 });
 
@@ -400,7 +400,7 @@
     prevCue = want;
     if (playing) playing.kill();
     // natural speed for the next moment; compressed when rewinding or skipping ahead
-    const dur = back ? Math.min(dist / 1.6, 3.5) : skip > 1 ? Math.min(dist, 5) : dist;
+    const dur = back ? Math.min(dist / 1.6, 3.5) : skip > 1 ? Math.min(dist, 3.5) : dist;
     playing = act.tweenTo(to, { duration: dur, ease: 'none' });
   }
 
@@ -412,7 +412,7 @@
   // fade + slide up + blur-to-sharp, line by line
   function reveal(targets, at, extra = {}) {
     const to = { opacity: 1, y: 0, duration: 0.45, stagger: 0.12, ease: 'power2.out', ...extra };
-    if (!RM) to.filter = 'blur(0px)';
+    if (BLUR) to.filter = 'blur(0px)';
     tl.to(targets, to, at);
   }
   const drawRule = (el, at) => tl.to(el, { scaleX: 1, duration: 0.35, ease: 'power2.inOut' }, at);
@@ -470,14 +470,10 @@
   tl.to(nurf, { y: nurfUp, duration: 0.5, ease: 'power2.inOut' }, 11.6);
   tl.to(ticker, { opacity: 1, y: 0, duration: 0.4 }, 11.8);
 
-  const rowH = () => items[0].offsetHeight;
-  const T0 = 12.0, TSTEP = 0.42;
+  // each responsibility slides in and stays, until the Connect page takes over
+  const T0 = 11.95, TSTEP = 0.42;
   items.forEach((li, i) => {
-    if (!i) return;
-    const at = T0 + i * TSTEP;
-    tl.to(tickerList, { y: () => -i * rowH(), duration: 0.28, ease: 'power2.inOut' }, at);
-    tl.to(li, { opacity: 1, duration: 0.28 }, at);
-    tl.to(items[i - 1], { opacity: 0.25, duration: 0.28 }, at);
+    tl.to(li, { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out' }, T0 + i * TSTEP);
   });
 
   // the swivel chair turns with him
@@ -574,7 +570,7 @@
       if (lenis) lenis.start();
       // S1: the name types in word by word
       const to = { opacity: 1, y: 0, duration: 0.6, stagger: 0.18, ease: 'power2.out', delay: 0.3 };
-      if (!RM) to.filter = 'blur(0px)';
+      if (BLUR) to.filter = 'blur(0px)';
       gsap.to($$('.intro-h .w'), to);
     }, 250);
   }

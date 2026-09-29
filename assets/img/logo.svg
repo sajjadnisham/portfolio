@@ -1,16 +1,54 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f3dca0"/>
-      <stop offset=".45" stop-color="#c9a45c"/>
-      <stop offset=".7" stop-color="#8a6a2e"/>
-      <stop offset="1" stop-color="#e8cf8f"/>
-    </linearGradient>
-    <radialGradient id="core" cx=".35" cy=".3" r=".8">
-      <stop offset="0" stop-color="#2a2622"/>
-      <stop offset="1" stop-color="#050505"/>
+    <!-- polished face: warm highlight upper-left, deeper gold toward the edge -->
+    <radialGradient id="face" cx="0.36" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#fff4c8"/>
+      <stop offset="0.28" stop-color="#f3cf6b"/>
+      <stop offset="0.62" stop-color="#d9a53a"/>
+      <stop offset="1" stop-color="#9a6a1c"/>
     </radialGradient>
+    <!-- raised rim: lit from the top-left, shaded bottom-right -->
+    <linearGradient id="rim" x1="0.15" y1="0.1" x2="0.85" y2="0.95">
+      <stop offset="0" stop-color="#fff0b8"/>
+      <stop offset="0.45" stop-color="#e2b04a"/>
+      <stop offset="1" stop-color="#7c5214"/>
+    </linearGradient>
+    <linearGradient id="rimIn" x1="0.85" y1="0.95" x2="0.15" y2="0.1">
+      <stop offset="0" stop-color="#fff0b8"/>
+      <stop offset="0.5" stop-color="#d7a13c"/>
+      <stop offset="1" stop-color="#855816"/>
+    </linearGradient>
+    <linearGradient id="letter" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#fff3c9"/>
+      <stop offset="0.45" stop-color="#e4b24a"/>
+      <stop offset="1" stop-color="#94621a"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0.3" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.46" stop-color="#fff" stop-opacity="0.45"/>
+      <stop offset="0.54" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="coin"><circle cx="32" cy="32" r="30.2"/></clipPath>
   </defs>
-  <circle cx="32" cy="32" r="30" fill="url(#core)" stroke="url(#gold)" stroke-width="2.2"/>
-  <path d="M22 44V20h4.2l11.6 16.4V20H42v24h-4.2L26.2 27.6V44z" fill="url(#gold)"/>
+
+  <!-- reeded edge -->
+  <circle cx="32" cy="32" r="31" fill="#8a5d18"/>
+  <circle cx="32" cy="32" r="30.4" fill="none" stroke="#f1cf73" stroke-width="1.2" stroke-dasharray="0.9 0.9"/>
+  <!-- rim and face -->
+  <circle cx="32" cy="32" r="29.2" fill="url(#rim)"/>
+  <circle cx="32" cy="32" r="25.6" fill="url(#rimIn)"/>
+  <circle cx="32" cy="32" r="24.6" fill="url(#face)"/>
+  <!-- beaded border -->
+  <circle cx="32" cy="32" r="22.3" fill="none" stroke="#b9862c" stroke-width="1.3" stroke-linecap="round" stroke-dasharray="0.01 2.5" opacity="0.9"/>
+  <circle cx="32" cy="32" r="22.3" fill="none" stroke="#fff1bd" stroke-width="0.5" stroke-linecap="round" stroke-dasharray="0.01 2.5" opacity="0.8" transform="translate(-0.25 -0.25)"/>
+
+  <!-- embossed N: shadow, highlight, then the struck letter -->
+  <g font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="30" text-anchor="middle">
+    <text x="33.1" y="43.6" fill="#5c3a0b" opacity="0.85">N</text>
+    <text x="31.3" y="41.8" fill="#fff8dc" opacity="0.9">N</text>
+    <text x="32" y="42.6" fill="url(#letter)" stroke="#7a4f12" stroke-width="0.7">N</text>
+  </g>
+
+  <!-- a soft diagonal glint across the polished metal -->
+  <g clip-path="url(#coin)"><rect x="0" y="0" width="64" height="64" fill="url(#shine)"/></g>
 </svg>

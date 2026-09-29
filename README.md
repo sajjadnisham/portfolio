@@ -45,7 +45,7 @@ There are two timelines in `script.js`:
 | 5.1 | NABH | a clipboard is tossed in on an arc; he reaches, catches it and holds it to his chest; "(NABH)" letter reveal + shine |
 | 7.1 | Maldives | plane flies in; he pilots with one hand and waves with the other |
 | 8.95 | NURF Pharmacy, IGMH | crouches, leaps out of the cockpit (the plane flies on), falls as IGMH rises, lands in his chair (the chair rocks) |
-| 11.6 | Responsibilities | he swivels with the chair, the duties ticker scrolls |
+| 11.6 | Responsibilities | he swivels with the chair; the seven duties appear one by one and stay until the Connect page |
 | 15.2 | Connect | everything lifts away, the social-link orbit draws in |
 
 Between moments he is never frozen: idle, piloting and sitting loops keep running.
@@ -63,9 +63,17 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
 - **Fallback:** without WebGL, or if the 3D files fail to load within 15 s, the illustrated 2D character plays instead.
 - **Tuning:** placements are in `hero3d.js` (`MARK`, `P0`, `SEAT`, `COCKPIT`, `MASK_FIT`). Timings are in the `S3D` block of `script.js`.
 - **Pharmacist's coat:** `tools/make_coat.py` repaints the outfit texture into `assets/3d/coat.webp`: the denim jacket becomes a white coat and the hoodie becomes dark scrubs, while the jeans stay black. `hero3d.js` adds the coat's lower half, an open-fronted skirt carried by the hips.
-- **Smooth hand-overs:** blends between moves are eased, and the walk loop starts at the phase whose legs match the end of the turn (`WA_PHASE` in `script.js`), so he never skips a step.
+- **Coat as cloth:** each frame, the skirt swings on a damped spring driven by his hips and is pushed out around his thighs, so it drapes when he walks or sits (`drapeCoat`).
+- **Smoothness:**
+  - Blends between moves are eased.
+  - The walk loop starts at the phase whose legs match the end of the turn (`WA_PHASE` in `script.js`).
+  - A pose filter eases every bone toward its target (about 45 ms), which removes pops at blends, loop seams and IK changes (`smoothPose`).
+  - Shaders are compiled at load, so switching scenes doesn't hitch.
+  - Rendering is capped at 1.5×, and drops to 1× on devices that can't hold about 45 fps.
+  - Phones skip the costly blur-to-sharp text effect.
 - **Changing the outfit:** export a new avatar from Avaturn, then run `gltf-transform webp`, `quantize` and `prune` on it, and save it as `assets/3d/nisham.glb`.
-- **Final round photo:** `tools/make_avatar.py` builds `assets/img/avatar.webp` from `tools/source/photo.webp`. It removes the background, places him on a grey studio backdrop and crops to the circle.
+- **Final round photo:** `tools/make_avatar.py` crops `tools/source/photo.webp` (cyan backdrop kept) into `assets/img/avatar.webp`.
+- **Logo:** `assets/img/logo.svg` is a gold coin with an embossed N. It spins on the loading screen and flips on hover.
 
 ## Artwork
 
