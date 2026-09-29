@@ -48,9 +48,10 @@ async function boot() {
   canvas.setAttribute('aria-hidden', 'true');
 
   /* ---------- assets ---------- */
-  const [gltf, moves] = await Promise.all([
+  const [gltf, moves, coatMap] = await Promise.all([
     new GLTFLoader().loadAsync(`assets/3d/nisham.glb?v=${V}`),
     fetch(`assets/3d/moves.json?v=${V}`).then((r) => { if (!r.ok) throw new Error('moves ' + r.status); return r.json(); }),
+    new THREE.TextureLoader().loadAsync(`assets/3d/coat.webp?v=${V}`),   // white coat over dark scrubs (tools/make_coat.py)
   ]);
 
   const avatar = gltf.scene;
@@ -72,6 +73,36 @@ async function boot() {
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     mats.forEach((m) => { m.clippingPlanes = [clip]; });
   });
+
+  /* ---------- pharmacist's outfit: white coat over dark scrubs ---------- */
+  const outfit = avatar.getObjectByName('avaturn_look_0');
+  if (outfit) {
+    coatMap.colorSpace = THREE.SRGBColorSpace;
+    coatMap.flipY = false;                          // glTF texture convention
+    const m = outfit.material;
+    coatMap.channel = m.map ? m.map.channel : 0;
+    m.map = coatMap;
+    if (m.normalScale) m.normalScale.setScalar(0.35);   // soften the denim weave into cotton
+    m.needsUpdate = true;
+  }
+  // The coat's lower half: an open-fronted flared skirt from the waist to mid-thigh,
+  // carried by the hips so it follows his walk. Built in the bind (T) pose.
+  {
+    avatar.updateMatrixWorld(true);
+    const hipsW = B.hips.getWorldPosition(new THREE.Vector3());
+    // starts up under the jacket hem, so no dark band shows between the two
+    const TOP = hipsW.y + 0.17, LEN = 0.47, GAP = 0.42;                    // metres; front opening (rad)
+    const g = new THREE.CylinderGeometry(0.2, 0.25, LEN, 40, 6, true, GAP / 2, Math.PI * 2 - GAP);
+    g.scale(1.08, 1, 0.84);                                               // hips are wider than deep
+    const skirt = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+      color: 0xf1f2f4, roughness: 0.82, side: THREE.DoubleSide, clippingPlanes: [clip],
+    }));
+    skirt.name = 'coatSkirt';
+    skirt.frustumCulled = false;
+    skirt.position.set(hipsW.x, TOP - LEN / 2, hipsW.z);
+    rig.add(skirt);
+    B.hips.attach(skirt);                                                 // keep world pose, follow the hips
+  }
 
   /* ---------- clips ---------- */
   const mixer = new THREE.AnimationMixer(avatar);
@@ -249,7 +280,8 @@ async function boot() {
   function sizeCanvas() {
     const box = hosts[frame];
     const w = box.clientWidth, h = box.clientHeight;
-    const dpr = Math.min(window.devicePixelRatio || 1, w < 600 ? 2 : 1.6);
+    // phones: 1.5× is sharp and keeps the frame rate high (smoother than 2–3× native)
+    const dpr = Math.min(window.devicePixelRatio || 1, w < 600 ? 1.5 : 1.5);
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
   }
@@ -346,7 +378,7 @@ async function boot() {
 
       const [rx1, rz1] = rootAt('turnWalk', s.tTW);
       const [rx2, rz2] = rootAt('turnWalkB', s.tTB);
-      const walked = -walkSpeed * s.tWA;               // walking away (−z)
+      const walked = -walkSpeed * Math.max(0, s.tWA - s.waStart);   // walking away (−z), after the turn's own travel
       rig.position.set(
         THREE.MathUtils.lerp(P0.x, MARK.x, s.drift) + (s.tTW > 0 ? rx1 : 0) + (s.tTB > 0 ? rx2 : 0),
         0,
@@ -445,7 +477,6 @@ async function boot() {
   let running = true;
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) clock.getDelta(); });
   function loop() {
-    requestAnimationFrame(loop);
     if (!running) return;
     tClock += Math.min(clock.getDelta(), 0.1);
     pose();
@@ -454,7 +485,7 @@ async function boot() {
   }
   useFrame('H');
   pose();
-  loop();
+  renderer.setAnimationLoop(loop);          // paced by the display, same tick as GSAP
 
   document.documentElement.classList.add('has-3d');
   window.__hero3d = { renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B };

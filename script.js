@@ -333,8 +333,12 @@
      numbers in S3D; the module turns them into his pose every frame.
      Timings: turn-and-walk clip 2.7 s (1.5 m), walk 1.44 m/s.
      --------------------------------------------------------- */
+  // The walk loop starts at the phase whose legs match the end of the turn
+  // (found by comparing leg rotations), so the hand-over doesn't skip a step.
+  const WA_PHASE = 0.813;
   const S3D = {
-    wIdle: 1, tTW: 0, wTW: 0, tWA: 0, wWA: 0, tTB: 0, wTB: 0, drift: 0, recoil: 0,   // hospital walk
+    wIdle: 1, tTW: 0, wTW: 0, tWA: WA_PHASE, waStart: WA_PHASE + 0.25,                  // hospital walk
+    wWA: 0, tTB: 0, wTB: 0, drift: 0, recoil: 0,
     mp: 0, wR: 0, wL: 0, ms: 0, mc: 0,                                                 // mask
     cp: 0, cw: 0, wC: 0,                                                               // clipboard
     tJ: 0.35, wJ: 0, gyP: 0,                                                           // jump from the plane
@@ -342,14 +346,16 @@
   };
   const x3 = (vars, at) => act.to(S3D, { ease: 'none', ...vars }, at);
   // S3 · turns and walks away, stops, turns back, walks onto his mark
-  x3({ wIdle: 0, wTW: 1, duration: 0.3 }, 0);
+  // (eased blends between moves; the walk is counted as travel from 2.7 s,
+  //  when the turn clip's own travel ends)
+  x3({ wIdle: 0, wTW: 1, duration: 0.5, ease: 'sine.inOut' }, 0);
   x3({ tTW: 2.7, duration: 2.7 }, 0);
-  x3({ wTW: 0, wWA: 1, duration: 0.15 }, 2.55);
-  x3({ tWA: 2.57, duration: 2.57 }, 2.55);
-  x3({ drift: 1, duration: 2.57, ease: 'sine.inOut' }, 2.55);
-  x3({ wWA: 0, wTB: 1, duration: 0.25 }, 5.0);
+  x3({ wTW: 0, wWA: 1, duration: 0.25, ease: 'sine.inOut' }, 2.45);
+  x3({ tWA: WA_PHASE + 2.82, duration: 2.82 }, 2.45);
+  x3({ drift: 1, duration: 2.82, ease: 'sine.inOut' }, 2.45);
+  x3({ wWA: 0, wTB: 1, duration: 0.45, ease: 'sine.inOut' }, 5.0);
   x3({ tTB: 2.7, duration: 2.7 }, 5.0);
-  x3({ wTB: 0, wIdle: 1, duration: 0.35 }, 7.55);
+  x3({ wTB: 0, wIdle: 1, duration: 0.6, ease: 'sine.inOut' }, 7.4);
   // S4 · mask: hand to pocket, mask out, up to his face, loops over the ears, hands down
   x3({ mp: 1, wR: 1, duration: 0.5, ease: 'sine.inOut' }, 'hosp');
   x3({ ms: 1, duration: 0.15 }, 'hosp+=0.5');
@@ -394,7 +400,7 @@
     prevCue = want;
     if (playing) playing.kill();
     // natural speed for the next moment; compressed when rewinding or skipping ahead
-    const dur = back ? Math.min(dist / 1.8, 3) : skip > 1 ? Math.min(dist, 4) : dist;
+    const dur = back ? Math.min(dist / 1.6, 3.5) : skip > 1 ? Math.min(dist, 5) : dist;
     playing = act.tweenTo(to, { duration: dur, ease: 'none' });
   }
 
@@ -502,7 +508,7 @@
     start: 'top top',
     end: () => '+=' + Math.round(tl.duration() * G.vh * BEAT),
     pin: true,
-    scrub: RM ? true : 1.2,
+    scrub: RM ? true : 1.4,
     anticipatePin: 1,
     invalidateOnRefresh: true,
     // cue the acting from where the scroll is heading, not the lagging scrub
@@ -524,7 +530,7 @@
 
   let lenis = null;
   if (!RM && window.Lenis) {
-    lenis = new Lenis({ lerp: 0.075, smoothWheel: true });
+    lenis = new Lenis({ lerp: 0.07, smoothWheel: true });
     lenis.on('scroll', ScrollTrigger.update);
     gsap.ticker.add((t) => lenis.raf(t * 1000));
     gsap.ticker.lagSmoothing(0);
