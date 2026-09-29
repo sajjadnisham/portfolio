@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#111}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"/assets/vendor/three/three.module.min.js","three/addons/":"/assets/vendor/three/addons/"}}</script>
+</head><body><script type="module">
+// Lab: film Mixamo clips on an avatar. ?av=<glb>&clips=<fbx|fbx>&n=<frames>&view=front|side
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+const q = new URLSearchParams(location.search);
+const clips = q.get('clips').split('|'), N = +(q.get('n') || 8), view = q.get('view') || 'front';
+const cw = 150, ch = 240, W = cw * N, H = ch * clips.length;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, H);
+r.outputColorSpace = THREE.SRGBColorSpace; r.setScissorTest(true); r.setClearColor(0x6a6a6a); document.body.appendChild(r.domElement);
+const av = (await new GLTFLoader().loadAsync(encodeURI(q.get('av')))).scene;
+const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.2));
+const d = new THREE.DirectionalLight(0xffffff, 2); d.position.set(1, 2, 3); sc.add(d); sc.add(av);
+const hipsY = av.getObjectByName('Hips').position.y;
+const info = [];
+for (let row = 0; row < clips.length; row++) {
+  const fbx = await new FBXLoader().loadAsync(encodeURI(clips[row]));
+  const clip = fbx.animations[0];
+  const ratio = hipsY / fbx.getObjectByName('mixamorigHips').position.y;
+  const tracks = clip.tracks.map((t) => { const c = t.clone(); c.name = c.name.replace(/^mixamorig/, ''); if (/^Hips\.position/.test(c.name)) for (let k = 0; k < c.values.length; k++) c.values[k] *= ratio; return c; });
+  const hp = tracks.find((t) => /^Hips\.position/.test(t.name));
+  info.push({ clip: clips[row], dur: +clip.duration.toFixed(2), hipsStart: [...hp.values.slice(0, 3)].map((v) => +v.toFixed(2)), hipsEnd: [...hp.values.slice(-3)].map((v) => +v.toFixed(2)) });
+  const mix = new THREE.AnimationMixer(av); mix.clipAction(new THREE.AnimationClip('c', clip.duration, tracks)).play();
+  for (let i = 0; i < N; i++) {
+    mix.setTime(clip.duration * i / (N - 1) * 0.999); av.updateMatrixWorld(true);
+    const hips = av.getObjectByName('Hips').getWorldPosition(new THREE.Vector3());
+    const cam = new THREE.PerspectiveCamera(35, cw / ch, 0.1, 50);
+    if (view === 'side') cam.position.set(hips.x + 4.6, 1.0, hips.z); else cam.position.set(hips.x, 1.0, hips.z + 4.6);
+    cam.lookAt(hips.x, 0.9, hips.z);
+    const x = i * cw, y = H - ch * (row + 1); r.setViewport(x, y, cw, ch); r.setScissor(x, y, cw, ch); r.render(sc, cam);
+  }
+  mix.stopAllAction();
+}
+window.__info = info; window.__done = true;
+</script></body></html>

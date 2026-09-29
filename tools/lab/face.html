@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#111}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"/assets/vendor/three/three.module.min.js","three/addons/":"/assets/vendor/three/addons/"}}</script>
+</head><body><script type="module">
+// Lab: check the procedural face shapes. ?states=b,s|b,s|...&zoom=0.28
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { buildFace } from '/assets/js/face.js';
+const q = new URLSearchParams(location.search);
+const states = (q.get('states') || '0,0|0.5,0|1,0|0,1|0,0.5').split('|').map((s) => s.split(',').map(Number));
+const Z = +(q.get('zoom') || 0.28), side = +(q.get('side') || 0);
+const cw = 360, ch = 400, W = cw * states.length;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, ch);
+r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.setScissorTest(true); r.setClearColor(0x6a6a6a); document.body.appendChild(r.domElement);
+const av = (await new GLTFLoader().loadAsync('/assets/3d/nisham.glb')).scene;
+const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.2));
+const d = new THREE.DirectionalLight(0xffffff, 2); d.position.set(1, 2, 3); sc.add(d); sc.add(av);
+const body = av.getObjectByName('avaturn_body');
+const face = buildFace(body);
+av.updateMatrixWorld(true);
+const head = av.getObjectByName('Head').getWorldPosition(new THREE.Vector3());
+states.forEach(([b, s], i) => {
+  face.set(b, s);
+  const cam = new THREE.PerspectiveCamera(30, cw / ch, 0.01, 10);
+  cam.position.set(head.x + side, head.y + 0.08, head.z + Z * 3.3); cam.lookAt(head.x, head.y + 0.08, head.z);
+  r.setViewport(i * cw, 0, cw, ch); r.setScissor(i * cw, 0, cw, ch); r.render(sc, cam);
+});
+const bb = new THREE.Box3().setFromBufferAttribute(body.geometry.attributes.position); window.__info = { bb: [bb.min.toArray(), bb.max.toArray()], mw: body.matrixWorld.elements, norm: body.geometry.attributes.position.normalized, arr: body.geometry.attributes.position.array.constructor.name, touched: face.touched, head: head.toArray(), bind: body.bindMatrix.elements, name: body.name };
+window.__done = true;
+</script></body></html>

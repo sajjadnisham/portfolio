@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#111}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"/assets/vendor/three/three.module.min.js","three/addons/":"/assets/vendor/three/addons/"}}</script>
+</head><body><script type="module">
+// Lab: compare avatar files side by side (front + back, and a face close-up).
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const files = new URLSearchParams(location.search).get('f').split('|');
+const W = 1500, H = 900;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, H);
+r.outputColorSpace = THREE.SRGBColorSpace; r.setScissorTest(true); r.setClearColor(0x6a6a6a); document.body.appendChild(r.domElement);
+const cw = W / files.length;
+for (let i = 0; i < files.length; i++) {
+  const g = await new GLTFLoader().loadAsync(encodeURI(files[i]));
+  const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.2));
+  const d = new THREE.DirectionalLight(0xffffff, 2); d.position.set(1, 2, 3); sc.add(d); sc.add(g.scene);
+  // body (top 60%) and face close-up (bottom 40%)
+  let cam = new THREE.PerspectiveCamera(30, cw / (H * 0.6), 0.1, 50); cam.position.set(0, 1.0, 5.2); cam.lookAt(0, 0.95, 0);
+  r.setViewport(i * cw, H * 0.4, cw, H * 0.6); r.setScissor(i * cw, H * 0.4, cw, H * 0.6); r.render(sc, cam);
+  cam = new THREE.PerspectiveCamera(22, cw / (H * 0.4), 0.05, 50); cam.position.set(0, 1.64, 1.0); cam.lookAt(0, 1.62, 0);
+  r.setViewport(i * cw, 0, cw, H * 0.4); r.setScissor(i * cw, 0, cw, H * 0.4); r.render(sc, cam);
+}
+window.__done = true;
+</script></body></html>

@@ -19,7 +19,7 @@
      7.1  S6  Flight to Maldives
      8.95 S7  NURF Pharmacy, IGMH   jumps out of the plane, falls into his chair
     11.6  S8  Responsibilities      chair swivel; the duties appear and stay
-    15.2  S9  Connect with me
+    16.0  S9  Connect with me
    ========================================================= */
 (() => {
   'use strict';
@@ -322,11 +322,15 @@
   act.to(sitterRig, { scaleY: 1 - 0.07 * M, scaleX: 1 + 0.035 * M, duration: 0.07, ease: 'power1.out' }, `${J}+=${L}`);
   act.to(sitterRig, { scaleY: 1, scaleX: 1, yPercent: -1.6 * M, duration: 0.15, ease: 'power2.out' }, `${J}+=${L + 0.07}`);
   act.to(sitterRig, { yPercent: 0, duration: 0.15, ease: 'power2.in' }, `${J}+=${L + 0.22}`);
-  act.to(chair, { yPercent: 0.7 * M, rotation: -1.2 * M, duration: 0.07, ease: 'power1.out' }, `${J}+=${L}`);
-  act.to(chair, { yPercent: 0, rotation: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)' }, `${J}+=${L + 0.07}`);
+  // (2D only; with the 3D avatar the chair rocks when he sits down, from S3D.bump in hero3d.js)
+  const rock = { v: 0 };
+  const rockChair = () => { if (!document.documentElement.classList.contains('has-3d')) gsap.set(chair, { yPercent: 0.7 * rock.v, rotation: -1.2 * rock.v }); };
+  act.to(rock, { v: M, duration: 0.07, ease: 'power1.out', onUpdate: rockChair }, `${J}+=${L}`);
+  act.to(rock, { v: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)', onUpdate: rockChair }, `${J}+=${L + 0.07}`);
   act.to(sitterRig, { rotation: -1.4 * M, duration: 0.3, ease: 'sine.out' }, `${J}+=${L + 0.4}`);        // leans back
   act.to(sitterRig, { rotation: 0, duration: 0.5, ease: 'sine.inOut' }, `${J}+=${L + 0.7}`);
-  act.addLabel('desk', `${J}+=${L + 1.25}`);
+  act.addLabel('desk', `${J}+=4.9`);   // the 3D landing, sitting down and settling at the keyboard take ~4.9 s
+  act.addLabel('bye', 'desk+=2.1');   // stands up and waves goodbye before the Connect page
 
   /* ---------------------------------------------------------
      3D acting (assets/js/hero3d.js renders it). These tweens only move
@@ -337,12 +341,14 @@
   // (found by comparing leg rotations), so the hand-over doesn't skip a step.
   const WA_PHASE = 0.813;
   const S3D = {
-    wIdle: 1, tTW: 0, wTW: 0, tWA: WA_PHASE, waStart: WA_PHASE + 0.25,                  // hospital walk
+    wIdle: 1, tTW: 0, wTW: 0, tWA: WA_PHASE, waStart: WA_PHASE + 0.25, waEnd: WA_PHASE + 2.82,   // hospital walk
     wWA: 0, tTB: 0, wTB: 0, drift: 0, recoil: 0,
     mp: 0, wR: 0, wL: 0, ms: 0, mc: 0,                                                 // mask
     cp: 0, cw: 0, wC: 0,                                                               // clipboard
     tJ: 0.35, wJ: 0, gyP: 0,                                                           // jump from the plane
-    tF: 1.15, wF: 1, gyD: 3.2,                                                         // fall into the chair
+    tLand: 0, wLand: 1, gyD: 1.4, tSTS: 0, wSTS: 0, wType: 0, bump: 0,                 // land, sit, type
+    tUp: 0.6, wUp: 0, wBye: 0,                                                         // stand up, wave goodbye
+    smile: 0.8,                                                                         // face (see hero3d.js)
   };
   const x3 = (vars, at) => act.to(S3D, { ease: 'none', ...vars }, at);
   // S3 · turns and walks away, stops, turns back, walks onto his mark
@@ -375,14 +381,28 @@
   x3({ wJ: 1, tJ: 0.85, duration: 0.25, ease: 'sine.in' }, 'files');
   x3({ tJ: 1.6, duration: 0.5 }, 'files+=0.25');
   x3({ gyP: 4.2, duration: 0.45, ease: 'power1.in' }, 'files+=0.3');
-  x3({ gyD: 0, duration: 0.62, ease: 'power2.in' }, 'files+=1.04');
-  x3({ tF: 1.55, duration: 0.6 }, 'files+=1.0');
-  x3({ wF: 0, duration: 0.16 }, 'files+=1.56');
-  x3({ gyD: -0.05, duration: 0.08, ease: 'power1.out' }, 'files+=1.66');
-  x3({ gyD: 0, duration: 0.22, ease: 'power2.out' }, 'files+=1.74');
+  // drops in from above (the Landing clip's own fall), lands on his feet in front of the chair…
+  x3({ gyD: 0, duration: 0.3, ease: 'power2.in' }, 'files+=0.95');
+  x3({ tLand: 1.4, duration: 1.4 }, 'files+=0.95');
+  // …sits back into it (the chair takes his weight), then settles at the keyboard
+  x3({ wLand: 0, wSTS: 1, duration: 0.3, ease: 'sine.inOut' }, 'files+=2.2');
+  x3({ tSTS: 2.23, duration: 2.23 }, 'files+=2.2');
+  x3({ bump: 1, duration: 0.08, ease: 'power1.out' }, 'files+=3.62');
+  x3({ bump: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)' }, 'files+=3.7');
+  x3({ wSTS: 0, wType: 1, duration: 0.5, ease: 'sine.inOut' }, 'files+=4.2');
+  x3({ smile: 0.35, duration: 0.6 }, 'files+=4.2');
+  // S8→S9 · stands up and waves goodbye with a smile
+  x3({ wType: 0, wUp: 1, duration: 0.35, ease: 'sine.inOut' }, 'desk');
+  x3({ tUp: 2.3, duration: 1.7 }, 'desk');
+  x3({ wUp: 0, wBye: 1, duration: 0.45, ease: 'sine.inOut' }, 'desk+=1.55');
+  x3({ smile: 1, duration: 0.5, ease: 'sine.out' }, 'desk+=1.4');
+  // face through the hospital: a friendly close-up smile, focused while walking, working
+  x3({ smile: 0, duration: 0.6, ease: 'sine.inOut' }, 0.3);
+  x3({ smile: 0.45, duration: 0.5, ease: 'sine.inOut' }, 7.6);
+  x3({ smile: 0, duration: 0.3 }, 'hosp');
 
   // scroll beat at which each acting label is reached
-  const CUES = [[1.75, 'hosp'], [3.7, 'mask'], [5.1, 'files'], [8.95, 'desk']];
+  const CUES = [[1.75, 'hosp'], [3.7, 'mask'], [5.1, 'files'], [8.95, 'desk'], [14.8, 'bye']];
   let cue = 'start';
   let prevCue = 'start';
   let playing = null;
@@ -485,17 +505,17 @@
   tl.fromTo(stage, stageAt('B2'), {
     x: () => G.B2.x, y: () => G.B2.y - G.vh * 1.15 * M,
     duration: 0.8, ease: 'power2.in', immediateRender: false,
-  }, 15.2);
-  tl.to(stage, { opacity: 0, duration: 0.4 }, 15.6);
-  tl.to(nurf, { y: () => nurfUp() - G.vh * 1.1 * M, opacity: 0, duration: 0.8, ease: 'power2.in' }, 15.2);
-  tl.to([ambB, shade], { opacity: 0, duration: 0.6 }, 15.2);
+  }, 16.0);
+  tl.to(stage, { opacity: 0, duration: 0.4 }, 16.4);
+  tl.to(nurf, { y: () => nurfUp() - G.vh * 1.1 * M, opacity: 0, duration: 0.8, ease: 'power2.in' }, 16.0);
+  tl.to([ambB, shade], { opacity: 0, duration: 0.6 }, 16.0);
 
-  tl.to(avatar, { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.6)' }, 15.8);
-  tl.fromTo(ringDraw, { strokeDashoffset: 100 }, { strokeDashoffset: 0, duration: 0.7, ease: 'power1.inOut' }, 16.1);
-  tl.to(icons, { opacity: 1, scale: 1, duration: 0.35, ease: 'back.out(3)', stagger: 0.12 }, 16.5);
-  tl.to(label, { opacity: 1, duration: 0.4 }, 17.0);
-  tl.to(foot, { opacity: 1, duration: 0.4 }, 17.1);
-  tl.to({}, { duration: 0.4 }, 17.2); // hold on the last frame
+  tl.to(avatar, { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.6)' }, 16.6);
+  tl.fromTo(ringDraw, { strokeDashoffset: 100 }, { strokeDashoffset: 0, duration: 0.7, ease: 'power1.inOut' }, 16.9);
+  tl.to(icons, { opacity: 1, scale: 1, duration: 0.35, ease: 'back.out(3)', stagger: 0.12 }, 17.3);
+  tl.to(label, { opacity: 1, duration: 0.4 }, 17.8);
+  tl.to(foot, { opacity: 1, duration: 0.4 }, 17.9);
+  tl.to({}, { duration: 0.4 }, 18.0); // hold on the last frame
 
   /* ---------- Scroll wiring ---------- */
   ScrollTrigger.create({

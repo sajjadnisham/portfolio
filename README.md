@@ -44,9 +44,10 @@ There are two timelines in `script.js`:
 | 3.7 | COVID | reaches into his pocket, lifts the mask to his face, hooks the loops over his ears, lowers his hands |
 | 5.1 | NABH | a clipboard is tossed in on an arc; he reaches, catches it and holds it to his chest; "(NABH)" letter reveal + shine |
 | 7.1 | Maldives | plane flies in; he pilots with one hand and waves with the other |
-| 8.95 | NURF Pharmacy, IGMH | crouches, leaps out of the cockpit (the plane flies on), falls as IGMH rises, lands in his chair (the chair rocks) |
-| 11.6 | Responsibilities | he swivels with the chair; the seven duties appear one by one and stay until the Connect page |
-| 15.2 | Connect | everything lifts away, the social-link orbit draws in |
+| 8.95 | NURF Pharmacy, IGMH | crouches, leaps out of the cockpit (the plane flies on), drops in as IGMH rises and lands on his feet, sits back into his chair (it rocks under him), starts typing |
+| 11.6 | Responsibilities | he types and swivels with the chair; the seven duties appear one by one and stay until the Connect page |
+| 14.8 | Goodbye | stands up and waves with a smile |
+| 16.0 | Connect | everything lifts away, the social-link orbit draws in |
 
 Between moments he is never frozen: idle, piloting and sitting loops keep running.
 
@@ -54,15 +55,16 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
 
 `assets/js/hero3d.js` (three.js, vendored in `assets/vendor/three/`) renders Nisham's avatar into the illustrated scenes.
 
-- **Avatar:** `assets/3d/nisham.glb`, made with Avaturn and optimised (WebP textures, quantised mesh, 2.7 MB). The original export is in `tools/source/3d/avatar.glb`.
-- **Moves:** Mixamo clips (`tools/source/3d/*.fbx`) baked into `assets/3d/moves.json` by `node tools/bake-moves.js` (needs a static server on port 8765 and Playwright).
+- **Avatar:** `assets/3d/nisham.glb`, made with Avaturn and optimised (WebP textures, quantised mesh, 1.9 MB). The original export is in `tools/source/3d/avatar.glb`.
+- **Moves:** Mixamo clips (idle, turn-and-walk, walk, pilot, wave, jump, Landing, Stand To Sit, Type To Sit, Stand Up) (`tools/source/3d/*.fbx`) baked into `assets/3d/moves.json` by `node tools/bake-moves.js` (needs a static server on port 8765 and Playwright).
 - **One renderer, three places:** its canvas moves into the hospital scene, the cockpit, or between the office chair and the desk. The painted layers around it still cover him correctly (behind the desk and laptop, legs hidden in the fuselage).
 - **Matched perspective:** each painting gets a camera tuned to its horizon and eye height, so he stands on the painted road at the right size wherever he walks.
 - **Choreography:** his acting is tweened on the shared `act` timeline (the `S3D` object in `script.js`), so it stays in sync with the props and plays backwards when scrolling up.
+- **Face:** the Avaturn export has no facial blendshapes, so `assets/js/face.js` builds two from the head mesh at load: **blink** (natural random blinks, sometimes a double blink) and **smile** (a warm smile in the close-up, a slight one while he works, a big one when he waves goodbye). The feature positions at the top of `face.js` must be re-measured for a different avatar. For richer expressions, export the avatar with ARKit blendshapes, if your Avaturn plan offers it.
 - **Hands:** the mask and the clipboard use a small two-bone IK solver for his arms.
 - **Fallback:** without WebGL, or if the 3D files fail to load within 15 s, the illustrated 2D character plays instead.
 - **Tuning:** placements are in `hero3d.js` (`MARK`, `P0`, `SEAT`, `COCKPIT`, `MASK_FIT`). Timings are in the `S3D` block of `script.js`.
-- **Pharmacist's coat:** `tools/make_coat.py` repaints the outfit texture into `assets/3d/coat.webp`: the denim jacket becomes a white coat and the hoodie becomes dark scrubs, while the jeans stay black. `hero3d.js` adds the coat's lower half, an open-fronted skirt carried by the hips.
+- **Pharmacist's coat:** `tools/make_coat.py` repaints the outfit texture into `assets/3d/coat.webp`: the white shirt is cleaned up and the blue jeans become charcoal trousers. `hero3d.js` adds the coat's lower half, an open-fronted skirt carried by the hips.
 - **Coat as cloth:** each frame, the skirt swings on a damped spring driven by his hips and is pushed out around his thighs, so it drapes when he walks or sits (`drapeCoat`).
 - **Smoothness:**
   - Blends between moves are eased.
