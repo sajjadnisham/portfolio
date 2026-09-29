@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"/assets/vendor/three/three.module.min.js","three/addons/":"/assets/vendor/three/addons/"}}</script>
+</head><body><script type="module">
+// Bakes the Mixamo FBX clips into assets/3d/moves.json for the avatar:
+// strips the "mixamorig" prefix, converts hips translation from Mixamo
+// centimetres to the avatar's metres, rounds values. Run via tools/bake-moves.js.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+const CLIPS = {
+  idle: 'Idle', walk: 'Walking', turnWalk: 'Catwalk Twist R To Walk 180', wave: 'Waving',
+  pilot: 'Piloting', sit: 'Sitting', jump: 'Jumping', fall: 'Jumping Down', land: 'Hard Landing',
+};
+const av = (await new GLTFLoader().loadAsync('/assets/3d/nisham.glb')).scene;
+const bones = new Set(); av.traverse(o => { if (o.isBone) bones.add(o.name); });
+const hipsY = av.getObjectByName('Hips').position.y;
+const out = { hipsY, clips: {} };
+const r4 = (v) => Math.round(v * 1e4) / 1e4;
+for (const [key, file] of Object.entries(CLIPS)) {
+  const fbx = await new FBXLoader().loadAsync(encodeURI('/tools/source/3d/' + file + '.fbx'));
+  const clip = fbx.animations[0];
+  const ratio = hipsY / fbx.getObjectByName('mixamorigHips').position.y;
+  const tracks = [];
+  for (const t of clip.tracks) {
+    const name = t.name.replace(/^mixamorig/, '');
+    const bone = name.split('.')[0];
+    if (!bones.has(bone)) continue;
+    const isPos = name.endsWith('.position');
+    if (isPos && bone !== 'Hips') continue;            // only the hips carry translation
+    const values = Array.from(t.values, v => r4(isPos ? v * ratio : v));
+    tracks.push({ n: name, t: Array.from(t.times, r4), v: values });
+  }
+  out.clips[key] = { d: r4(clip.duration), tracks };
+}
+window.__out = out; window.__done = true;
+</script></body></html>

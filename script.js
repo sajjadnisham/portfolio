@@ -263,7 +263,7 @@
     act.to(hero, { y: 4, duration: 0.12, yoyo: true, repeat: 1, ease: 'sine.inOut' }, stop);              // settles
     act.to(legL, { rotation: -3, duration: 0.2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, stop + 0.3); // shifts his stance
   }
-  act.addLabel('hosp', '+=0.15');
+  act.addLabel('hosp', Math.max(act.duration() + 0.15, 8.1));
 
   /* --- S4 · takes the mask out of his pocket and puts it on (drawn frames) --- */
   const poses = [poseStand, ...maskf];
@@ -275,7 +275,7 @@
     act.set(poses[i], { opacity: 0 }, `hosp+=${mt + 0.09}`);
     act.to(hero, { y: 3, duration: 0.1, yoyo: true, repeat: 1, ease: 'sine.inOut' }, `hosp+=${mt}`);   // weight follows the arms
   });
-  act.addLabel('mask', `hosp+=${mt + 0.55}`);
+  act.addLabel('mask', `hosp+=${Math.max(mt + 0.55, 2.9)}`);
 
   /* --- S5 · a file is tossed in; he catches it --- */
   act.set(files, { opacity: 1 }, 'mask');
@@ -289,7 +289,7 @@
   act.to(hero, { xPercent: 0, rotation: 0, duration: 0.3, ease: 'power2.out' }, 'mask+=0.81');
   act.to(clip, { opacity: 1, duration: 0.15 }, 'mask+=0.74');
   act.set([maskf[3], files], { opacity: 0 }, 'mask+=0.9');
-  act.addLabel('files', 'mask+=1.2');
+  act.addLabel('files', 'mask+=1.5');
 
   /* --- S7 · jumps out of the plane and falls into his chair --- */
   const J = 'files';
@@ -328,9 +328,57 @@
   act.to(sitterRig, { rotation: 0, duration: 0.5, ease: 'sine.inOut' }, `${J}+=${L + 0.7}`);
   act.addLabel('desk', `${J}+=${L + 1.25}`);
 
+  /* ---------------------------------------------------------
+     3D acting (assets/js/hero3d.js renders it). These tweens only move
+     numbers in S3D; the module turns them into his pose every frame.
+     Timings: turn-and-walk clip 2.7 s (1.5 m), walk 1.44 m/s.
+     --------------------------------------------------------- */
+  const S3D = {
+    wIdle: 1, tTW: 0, wTW: 0, tWA: 0, wWA: 0, tTB: 0, wTB: 0, drift: 0, recoil: 0,   // hospital walk
+    mp: 0, wR: 0, wL: 0, ms: 0, mc: 0,                                                 // mask
+    cp: 0, cw: 0, wC: 0,                                                               // clipboard
+    tJ: 0.35, wJ: 0, gyP: 0,                                                           // jump from the plane
+    tF: 1.15, wF: 1, gyD: 3.2,                                                         // fall into the chair
+  };
+  const x3 = (vars, at) => act.to(S3D, { ease: 'none', ...vars }, at);
+  // S3 · turns and walks away, stops, turns back, walks onto his mark
+  x3({ wIdle: 0, wTW: 1, duration: 0.3 }, 0);
+  x3({ tTW: 2.7, duration: 2.7 }, 0);
+  x3({ wTW: 0, wWA: 1, duration: 0.15 }, 2.55);
+  x3({ tWA: 2.57, duration: 2.57 }, 2.55);
+  x3({ drift: 1, duration: 2.57, ease: 'sine.inOut' }, 2.55);
+  x3({ wWA: 0, wTB: 1, duration: 0.25 }, 5.0);
+  x3({ tTB: 2.7, duration: 2.7 }, 5.0);
+  x3({ wTB: 0, wIdle: 1, duration: 0.35 }, 7.55);
+  // S4 · mask: hand to pocket, mask out, up to his face, loops over the ears, hands down
+  x3({ mp: 1, wR: 1, duration: 0.5, ease: 'sine.inOut' }, 'hosp');
+  x3({ ms: 1, duration: 0.15 }, 'hosp+=0.5');
+  x3({ mp: 2, duration: 0.6, ease: 'sine.inOut' }, 'hosp+=0.65');
+  x3({ mp: 4, duration: 0.65, ease: 'sine.inOut' }, 'hosp+=1.25');
+  x3({ wL: 1, duration: 0.55, ease: 'sine.inOut' }, 'hosp+=1.3');
+  x3({ mc: 1, duration: 0.5, ease: 'sine.inOut' }, 'hosp+=1.35');
+  x3({ wR: 0, wL: 0, duration: 0.5, ease: 'sine.inOut' }, 'hosp+=2.2');
+  // S5 · clipboard tossed in, caught with a little recoil, brought to his chest
+  act.set(S3D, { cw: 1 }, 'mask');
+  x3({ cp: 1, duration: 0.75 }, 'mask');
+  x3({ wC: 1, duration: 0.37, ease: 'sine.out' }, 'mask+=0.35');
+  x3({ recoil: -0.04, duration: 0.07, ease: 'power1.out' }, 'mask+=0.75');
+  x3({ recoil: 0, duration: 0.28, ease: 'power2.out' }, 'mask+=0.82');
+  x3({ cp: 2, duration: 0.5, ease: 'power2.inOut' }, 'mask+=0.8');
+  // S7 · crouch in the cockpit, leap out of frame; fall from above into his chair
+  x3({ wJ: 1, tJ: 0.85, duration: 0.25, ease: 'sine.in' }, 'files');
+  x3({ tJ: 1.6, duration: 0.5 }, 'files+=0.25');
+  x3({ gyP: 4.2, duration: 0.45, ease: 'power1.in' }, 'files+=0.3');
+  x3({ gyD: 0, duration: 0.62, ease: 'power2.in' }, 'files+=1.04');
+  x3({ tF: 1.55, duration: 0.6 }, 'files+=1.0');
+  x3({ wF: 0, duration: 0.16 }, 'files+=1.56');
+  x3({ gyD: -0.05, duration: 0.08, ease: 'power1.out' }, 'files+=1.66');
+  x3({ gyD: 0, duration: 0.22, ease: 'power2.out' }, 'files+=1.74');
+
   // scroll beat at which each acting label is reached
   const CUES = [[1.75, 'hosp'], [3.7, 'mask'], [5.1, 'files'], [8.95, 'desk']];
   let cue = 'start';
+  let prevCue = 'start';
   let playing = null;
   function direct(t) {
     let want = 'start';
@@ -341,9 +389,12 @@
     if (RM) { act.seek(to); return; }
     const dist = Math.abs(to - act.time());
     const back = to < act.time();
+    const order = ['start', ...CUES.map((c) => c[1])];
+    const skip = Math.abs(order.indexOf(want) - order.indexOf(prevCue));
+    prevCue = want;
     if (playing) playing.kill();
-    // natural speed; faster when rewinding or skipping several scenes
-    const dur = Math.min(dist, 3.2) / (back ? 1.8 : 1);
+    // natural speed for the next moment; compressed when rewinding or skipping ahead
+    const dur = back ? Math.min(dist / 1.8, 3) : skip > 1 ? Math.min(dist, 4) : dist;
     playing = act.tweenTo(to, { duration: dur, ease: 'none' });
   }
 
@@ -458,6 +509,13 @@
     onUpdate: (self) => direct(self.progress * tl.duration()),
   });
 
+  // hand the timelines to the 3D avatar module (assets/js/hero3d.js)
+  window.__story = {
+    S3D, tl, act,
+    version: document.documentElement.dataset.v || '',
+    el: { hostH: $('.host-h'), hostP: $('.host-p'), hostD: $('.host-d'), portraitWrap, chair },
+  };
+
   // re-measure the acting's position-based moves after a resize
   ScrollTrigger.addEventListener('refresh', () => {
     const t = act.time();
@@ -484,7 +542,7 @@
   const bar = $('.loader-bar span');
   const imgs = $$('img').filter((i) => !loader.contains(i));
   let done = 0;
-  const total = imgs.length + 1; // + fonts
+  const total = imgs.length + 2; // + fonts + the 3D avatar
   const tick = () => { done++; bar.style.transform = `scaleX(${done / total})`; if (done >= total) start(); };
   imgs.forEach((img) => {
     if (img.complete && img.naturalWidth) tick();
@@ -494,6 +552,11 @@
     }
   });
   (document.fonts ? document.fonts.ready : Promise.resolve()).then(tick);
+  // the 3D avatar reports in (true = ready, false = stay 2D); never wait more than 15 s
+  new Promise((res) => {
+    window.__hero3dDone = res;
+    setTimeout(() => res(false), 15000);
+  }).then(tick);
 
   let started = false;
   function start() {
