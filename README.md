@@ -62,7 +62,10 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
 - **Hands:** the mask and the clipboard use a small two-bone IK solver for his arms.
 - **Fallback:** without WebGL, or if the 3D files fail to load within 15 s, the illustrated 2D character plays instead.
 - **Tuning:** placements are in `hero3d.js` (`MARK`, `P0`, `SEAT`, `COCKPIT`, `MASK_FIT`). Timings are in the `S3D` block of `script.js`.
+- **Pharmacist's coat:** `tools/make_coat.py` repaints the outfit texture into `assets/3d/coat.webp`: the denim jacket becomes a white coat and the hoodie becomes dark scrubs, while the jeans stay black. `hero3d.js` adds the coat's lower half, an open-fronted skirt carried by the hips.
+- **Smooth hand-overs:** blends between moves are eased, and the walk loop starts at the phase whose legs match the end of the turn (`WA_PHASE` in `script.js`), so he never skips a step.
 - **Changing the outfit:** export a new avatar from Avaturn, then run `gltf-transform webp`, `quantize` and `prune` on it, and save it as `assets/3d/nisham.glb`.
+- **Final round photo:** `tools/make_avatar.py` builds `assets/img/avatar.webp` from `tools/source/photo.webp`. It removes the background, places him on a grey studio backdrop and crops to the circle.
 
 ## Artwork
 
