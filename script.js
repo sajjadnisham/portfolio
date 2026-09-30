@@ -350,7 +350,7 @@
     tJ: 0.35, wJ: 0, gyP: 0,                                                           // jump from the plane
     tLand: 0, wLand: 1, gyD: 1.4, tSTS: 0, wSTS: 0, wType: 0, bump: 0,                 // land, sit, type
     tUp: 0.6, wUp: 0, wBye: 0,                                                         // stand up, wave goodbye
-    smile: 0, brow: 0, jaw: 0, squint: 0,                                              // face (see face.js)
+    smile: 0,                                                                          // face (see face.js)
   };
   const x3 = (vars, at) => act.to(S3D, { ease: 'none', ...vars }, at);
   // S3 · turns and walks away, stops, turns back, walks onto his mark
@@ -404,26 +404,16 @@
   x3({ tUp: 2.3, duration: 1.7 }, 'desk');
   x3({ wUp: 0, wBye: 1, duration: 0.45, ease: 'sine.inOut' }, 'desk+=1.55');
 
-  /* Face (face.js): smile 0–1, brow −1 (frown/focus) … +1 (raised), jaw 0–1, squint 0–1 */
-  const face = (vars, at, duration = 0.35, ease = 'sine.inOut') => x3({ ...vars, duration, ease }, at);
-  face({ smile: 0, brow: 0.25 }, 0.3, 0.6);                          // sets off: attentive, looking at the hospital
-  face({ brow: 0 }, 2.0, 0.8);
-  face({ smile: 0.6, brow: 0.3 }, 2.45 + WALK_T + 2.2, 0.5);                         // turns back to us on his mark
-  face({ smile: 0.3, brow: 0 }, 'hosp', 0.3);
-  face({ smile: 0.7, brow: 0.2 }, 'hosp+=2.5', 0.5);                 // mask on: the smile shows in his eyes
-  face({ smile: 0, brow: 0.9, jaw: 0.35 }, 'mask+=0.2', 0.2, 'sine.out');   // "oh!" as the file flies in
-  face({ smile: 0.9, brow: 0.2, jaw: 0 }, 'mask+=0.85', 0.4);        // caught it, pleased
-  face({ smile: 1, brow: 0.3 }, 'mask+=1.4', 0.4);                   // flying, waving
-  face({ smile: 0.2, brow: -0.5, squint: 0.6 }, 'files', 0.2);       // gets ready to jump
-  face({ smile: 0.5, brow: 1, jaw: 0.75, squint: 0 }, 'files+=0.3', 0.2, 'sine.out');   // leaps: whoa
-  face({ smile: 0, brow: -0.8, jaw: 0.3, squint: 1 }, 'files+=1.22', 0.1, 'power1.out'); // lands hard
-  face({ smile: 0.8, brow: 0.3, jaw: 0, squint: 0 }, 'files+=1.8', 0.6);                // relief
-  face({ smile: 0.25, brow: -0.35 }, 'files+=4.2', 0.8);             // concentrating at the keyboard
-  face({ smile: 1, brow: 0.5, jaw: 0.12 }, 'desk+=1.2', 0.5);        // big goodbye smile
-  face({ brow: 0.25, jaw: 0 }, 'desk+=2.2', 0.8);
+  /* Face (face.js): a gentle smile when he faces us, neutral while he walks and works */
+  const face = (vars, at, duration = 0.5) => x3({ ...vars, duration, ease: 'sine.inOut' }, at);
+  face({ smile: 0 }, 0.3, 0.6);                                        // sets off toward the hospital
+  face({ smile: 0.45 }, 2.45 + WALK_T + 2.2);                          // turns back to us on his mark
+  face({ smile: 0 }, 'hosp', 0.3);
+  face({ smile: 0.35 }, 'files+=4.2', 0.6);                            // at the keyboard
+  face({ smile: 1 }, 'desk+=1.4');                                     // goodbye
 
   /* --- S1 · the opening: he falls out of the sky and lands in front of us --- */
-  // Everything above moves later by INTRO; the fall plays as soon as the page is ready.
+  // Everything above moves later by INTRO; the fall plays when scrolling starts (CUES).
   const INTRO = 2.7;
   act.shiftChildren(INTRO, true);
   act.addLabel('start', 0);
@@ -432,13 +422,11 @@
   x3({ tLandH: 0.33, duration: 0.75, ease: 'power1.in' }, 0);       // the clip's own drop, stretched to match
   x3({ tLandH: 2.1, duration: 1.8 }, 0.75);                          // impact, deep knee bend, rises
   x3({ wLandH: 0, wIdle: 1, duration: 0.55, ease: 'sine.inOut' }, 2.05);
-  face({ brow: 1, jaw: 0.8 }, 0, 0.3, 'sine.out');                   // wide-eyed in the air
-  face({ brow: -0.7, jaw: 0.25, squint: 1 }, 0.72, 0.1, 'power1.out');   // impact
-  face({ smile: 1, brow: 0.4, jaw: 0, squint: 0 }, 1.3, 0.7);        // looks up and smiles
-  face({ brow: 0.1 }, 2.3, 0.6);
+  face({ smile: 0.8 }, 1.4, 0.7);                                     // lands, looks up and smiles
 
   // scroll beat at which each acting label is reached
-  const CUES = [[0, 'landed'], [1.75, 'hosp'], [3.7, 'mask'], [5.1, 'files'], [8.95, 'desk'], [14.8, 'bye']];
+  // the fall from the sky starts with the first bit of scrolling
+  const CUES = [[0.06, 'landed'], [1.75, 'hosp'], [3.7, 'mask'], [5.1, 'files'], [8.95, 'desk'], [14.8, 'bye']];
   let cue = 'start';
   let introReady = false;
   let prevCue = 'start';
@@ -451,15 +439,27 @@
     cue = want;
     const to = act.labels[want];
     if (RM) { act.seek(to); return; }
-    const dist = Math.abs(to - act.time());
-    const back = to < act.time();
     const order = ['start', ...CUES.map((c) => c[1])];
-    const skip = Math.abs(order.indexOf(want) - order.indexOf(prevCue));
+    const iTo = order.indexOf(want), iFrom = order.indexOf(prevCue);
     prevCue = want;
     if (playing) playing.kill();
-    // natural speed for the next moment; compressed when rewinding or skipping ahead
-    const dur = back ? Math.min(dist / 1.6, 3.5) : skip > 1 ? Math.min(dist, 3.5) : dist;
-    playing = act.tweenTo(to, { duration: dur, ease: 'none' });
+    // Skipping ahead past whole scenes: jump to the start of the target moment
+    // and play just that one, so a fast scroll never shows an earlier scene's
+    // props (the plane, the clipboard…) lingering over a later page.
+    const base = act.labels[order[iTo - 1]] ?? 0;          // where the target moment starts
+    if (iTo - iFrom > 1 && act.time() < base) act.seek(base);
+    const now = act.time();
+    if (to < now) {
+      // scrolling back up: a quick rewind
+      playing = act.tweenTo(to, { duration: Math.min((now - to) / 2.5, 1.2), ease: 'none' });
+    } else if (now < base - 0.05) {
+      // still finishing the previous moment: fast-forward the rest, then play this one
+      playing = gsap.timeline()
+        .add(act.tweenTo(base, { duration: Math.min((base - now) / 3, 1), ease: 'none' }))
+        .add(act.tweenTo(to, { duration: to - base, ease: 'none' }));
+    } else {
+      playing = act.tweenTo(to, { duration: to - now, ease: 'none' });   // natural speed
+    }
   }
 
   /* =========================================================
@@ -569,7 +569,7 @@
 
   // hand the timelines to the 3D avatar module (assets/js/hero3d.js)
   window.__story = {
-    S3D, tl, act,
+    S3D, tl, act, G,
     version: document.documentElement.dataset.v || '',
     el: { hostH: $('.host-h'), hostP: $('.host-p'), hostD: $('.host-d'), portraitWrap, chair },
   };
@@ -587,9 +587,7 @@
     gsap.ticker.add((t) => lenis.raf(t * 1000));
     gsap.ticker.lagSmoothing(0);
   }
-  const scrollToY = (y) => (lenis ? lenis.scrollTo(y, { duration: 1.6 }) : window.scrollTo({ top: y, behavior: RM ? 'auto' : 'smooth' }));
 
-  $('.logo').addEventListener('click', (e) => { e.preventDefault(); scrollToY(0); });
 
   /* ---------- Preloader ---------- */
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
@@ -628,9 +626,7 @@
       const to = { opacity: 1, y: 0, duration: 0.6, stagger: 0.18, ease: 'power2.out', delay: 0.3 };
       if (BLUR) to.filter = 'blur(0px)';
       gsap.to($$('.intro-h .w'), to);
-      // S1: …and he drops out of the sky
-      introReady = true;
-      direct(ScrollTrigger.getAll()[0] ? ScrollTrigger.getAll()[0].progress * tl.duration() : 0);
+      introReady = true;                         // (he falls in once the visitor starts scrolling)
     }, 250);
   }
   // never trap the visitor behind the loader

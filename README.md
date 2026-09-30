@@ -38,14 +38,14 @@ There are two timelines in `script.js`:
 
 | Scroll beat | Scene | What he does (3D) |
 | --- | --- | --- |
-| 0 | Intro | as soon as the page loads he drops out of the sky, lands in a deep knee bend, rises and smiles; "I am Nisham Sajjad," types in word by word, then the 8-years line |
+| 0 | Intro | the page opens on "I am Nisham Sajjad," alone (typed in word by word); at the first scroll he drops out of the sky, lands in a deep knee bend, rises and smiles; the 8-years line follows |
 | 1.75 | Mission Hospital | turns and walks toward the hospital, turns back and walks onto his mark |
 | 3.7 | COVID | reaches into his pocket, lifts the mask to his face while the other hand comes up, hooks both loops over his ears, lowers his hands |
 | 5.1 | NABH | a clipboard is tossed in on an arc; he reaches, catches it and holds it to his chest; "(NABH)" appears on the sign letter by letter |
 | 7.1 | Maldives | plane flies in; he pilots with one hand and waves with the other |
 | 8.95 | NURF Pharmacy, IGMH | crouches, leaps out of the cockpit (the plane flies on), drops in as IGMH rises and lands on his feet, sits back into his chair (it rocks under him), starts typing |
 | 11.6 | Responsibilities | he types and swivels with the chair; the seven duties appear one by one and stay until the Connect page |
-| 14.8 | Goodbye | stands up and waves with a smile |
+| 14.8 | Goodbye | waves goodbye with a smile: standing up on desktop, from his chair on phones (the phone layout has no room above his head) |
 | 16.0 | Connect | everything lifts away, the social-link orbit draws in |
 
 Between moments he is never frozen: idle, piloting and sitting loops keep running.
@@ -58,9 +58,9 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
 - **Moves:** Mixamo clips (idle, turn-and-walk, walk, pilot, wave, jump, Landing, Stand To Sit, Type To Sit, Stand Up) (`tools/source/3d/*.fbx`) baked into `assets/3d/moves.json` by `node tools/bake-moves.js` (needs a static server on port 8765 and Playwright).
 - **One renderer, three places:** its canvas moves into the hospital scene, the cockpit, or between the office chair and the desk. The painted layers around it still cover him correctly (behind the desk and laptop, legs hidden in the fuselage).
 - **Matched perspective:** each painting gets a camera tuned to its horizon and eye height, so he stands on the painted road at the right size wherever he walks.
-- **Choreography:** his acting is tweened on the shared `act` timeline (the `S3D` object in `script.js`), so it stays in sync with the props and plays backwards when scrolling up.
-- **Face:** the Avaturn export has no facial blendshapes, so `assets/js/face.js` builds them from the head mesh at load: **blink** (natural random blinks, also used as a squint), **smile**, **brow up / brow down** and **jaw drop**. `script.js` acts with them: wide-eyed while falling, a wince on landing, a big smile after, surprise when the file flies in, focus at the keyboard, a big smile for goodbye. A slow drift in the brows keeps him alive between moments. The feature positions at the top of `face.js` must be re-measured for a different avatar. For richer expressions, export the avatar with ARKit blendshapes, if your Avaturn plan offers it.
-- **Hands:** the mask and the clipboard use a small two-bone IK solver for his arms. Each hand follows one smooth spline path (centripetal Catmull-Rom) through waypoints that move with his body, and the elbow direction blends continuously, so the reach flows like a real one (`handsHospital`).
+- **Choreography:** his acting is tweened on the shared `act` timeline (the `S3D` object in `script.js`), so it stays in sync with the props and plays backwards when scrolling up. Scrolling past several scenes at once jumps straight to the latest moment, and scrolling back rewinds quickly, so props from one scene never linger on another page.
+- **Face:** the Avaturn export has no facial blendshapes, so `assets/js/face.js` builds two from the head mesh at load: **blink** (natural random blinks) and **smile** (after landing, on his mark, at the keyboard, and for goodbye). The feature positions at the top of `face.js` must be re-measured for a different avatar.
+- **Hands:** the mask and the clipboard use an anatomical two-bone IK solver: the elbow is treated as a hinge, and the upper arm twists so the elbow only ever bends the natural way. Each hand follows one smooth spline path (centripetal Catmull-Rom) through waypoints that move with his body, and the elbow direction blends continuously, so the reach flows like a real one (`handsHospital`).
 - **Fallback:** without WebGL, or if the 3D files fail to load within 15 s, the illustrated 2D character plays instead.
 - **Tuning:** placements are in `hero3d.js` (`MARK`, `P0` (where he lands), `SEAT`, `COCKPIT`, `MASK_FIT`). Timings are in the `S3D` block of `script.js`.
 - **Outfit:** `tools/make_coat.py` repaints the outfit texture into `assets/3d/coat.webp`: the white shirt is cleaned up and the blue jeans become charcoal trousers.
@@ -73,7 +73,6 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
   - Phones skip the costly blur-to-sharp text effect.
 - **Changing the outfit:** export a new avatar from Avaturn, then run `gltf-transform webp`, `quantize` and `prune` on it, and save it as `assets/3d/nisham.glb`.
 - **Final round photo:** `tools/make_avatar.py` crops `tools/source/photo.webp` (cyan backdrop kept) into `assets/img/avatar.webp`.
-- **Logo:** `assets/img/logo.svg` is a gold coin with an embossed N. It spins on the loading screen and flips on hover.
 
 ## Artwork
 
@@ -111,5 +110,5 @@ cd tools && python extract_mask.py
 
 - Only `transform` / `opacity` are animated, except the short blur-to-sharp on text lines.
 - `prefers-reduced-motion` turns the film into simple cross-fades: no movement, no smooth scrolling, no looping animations.
-- Every scene image is preloaded behind a small "N" loading screen. The whole set is about 0.7 MB of WebP.
+- Every scene image is preloaded behind a plain loading line. The whole set is about 0.7 MB of WebP.
 - Social icons are real links with labels and at least 54px tap targets. They lift and glow on hover and keyboard focus.

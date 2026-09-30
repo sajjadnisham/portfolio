@@ -138,7 +138,8 @@ async function boot() {
   const only = (c, keep, name) => new THREE.AnimationClip(name, c.duration, c.tracks.filter((t) => keep(t.name)));
   addAction('pilotL', only(A.pilot.getClip(), (n) => !RIGHT_ARM.test(n), 'pilotL'));
   addAction('waveR', only(A.wave.getClip(), (n) => RIGHT_ARM.test(n), 'waveR'));
-  addAction('idleL', only(A.idle.getClip(), (n) => !RIGHT_ARM.test(n), 'idleL'));   // standing, right arm free to wave
+  addAction('idleL', only(A.idle.getClip(), (n) => !RIGHT_ARM.test(n), 'idleL'));
+  addAction('typingL', only(A.typing.getClip(), (n) => !RIGHT_ARM.test(n), 'typingL'));   // typing, right hand free   // standing, right arm free to wave
   addAction('walkB', makeClip('walk', true));           // walking away from camera
 
   const rootAt = (key, t) => {
@@ -294,24 +295,72 @@ async function boot() {
     b.quaternion.copy(_qp.invert().multiply(_qw));
     b.updateMatrixWorld(true);
   }
+  /* Anatomical two-bone IK. The elbow is a hinge: in the rest T-pose the
+     forearm flexes toward his front, about the axis restDir × forward. The
+     solver orients the upper arm so that hinge lies across the bend plane
+     (upper arm twisting as a real shoulder does), then bends the forearm
+     about that hinge only, so the elbow can never fold backwards or sideways. */
+  const FWD = new THREE.Vector3(0, 0, 1);                // his forward in rig space
+  const REST = new Map();                                // bone → rest data (rig space)
+  function restOf(upper, lower, end) {
+    if (REST.has(upper)) return REST.get(upper);
+    // measured once at boot, with the rig at the origin in the bind pose
+    const qU = upper.getWorldQuaternion(new THREE.Quaternion());
+    const qL = lower.getWorldQuaternion(new THREE.Quaternion());
+    const pa = upper.getWorldPosition(new THREE.Vector3()), pb = lower.getWorldPosition(new THREE.Vector3());
+    const pc = end.getWorldPosition(new THREE.Vector3());
+    const dU = pb.clone().sub(pa).normalize(), dL = pc.clone().sub(pb).normalize();
+    const hinge = dU.clone().cross(FWD).normalize();   // positive rotation = flexion toward the front
+    const r = { qU, qL, dU, dL, hinge };
+    REST.set(upper, r);
+    return r;
+  }
+  const _m0 = new THREE.Matrix4(), _m1 = new THREE.Matrix4(), _qr = new THREE.Quaternion(), _qrig = new THREE.Quaternion();
+  const _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3();
+  function frameQ(d, h, out) {                           // rotation of the basis (d, h, d×h)
+    _z.crossVectors(d, h).normalize();
+    _m0.makeBasis(d, h, _z);
+    return out.setFromRotationMatrix(_m0);
+  }
+  function setWorldQ(b, qWorld) {
+    b.parent.getWorldQuaternion(_qp);
+    b.quaternion.copy(_qp.invert().multiply(qWorld));
+    b.updateMatrixWorld(true);
+  }
   function ik(upper, lower, end, target, pole, w) {
     if (w <= 0.001) return;
+    const R = restOf(upper, lower, end);
     const q0u = upper.quaternion.clone(), q0l = lower.quaternion.clone();
     upper.getWorldPosition(_a); lower.getWorldPosition(_b); end.getWorldPosition(_c);
     const l1 = _a.distanceTo(_b), l2 = _b.distanceTo(_c);
-    _t.copy(target).sub(_a);
-    const d = THREE.MathUtils.clamp(_t.length(), 0.05, (l1 + l2) * 0.999);
-    const dirv = _t.normalize();
-    const cosA = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d);
-    const sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
-    const pv = pole.clone().sub(_a); pv.sub(dirv.clone().multiplyScalar(pv.dot(dirv))).normalize();
-    const elbow = _a.clone().add(dirv.clone().multiplyScalar(l1 * cosA)).add(pv.multiplyScalar(l1 * sinA));
-    _q.setFromUnitVectors(_b.clone().sub(_a).normalize(), elbow.sub(_a).normalize());
-    rotateBoneWorld(upper, _q);
-    lower.getWorldPosition(_b); end.getWorldPosition(_c);
-    const tgt = _a.clone().add(dirv.clone().multiplyScalar(d));
-    _q.setFromUnitVectors(_c.clone().sub(_b).normalize(), tgt.sub(_b).normalize());
-    rotateBoneWorld(lower, _q);
+    // work in rig space (the rest data is), then convert back
+    rig.getWorldQuaternion(_qrig);
+    const inv = _qrig.clone().invert();
+    const tLoc = target.clone().sub(_a).applyQuaternion(inv);
+    const d = THREE.MathUtils.clamp(tLoc.length(), 0.05, (l1 + l2) * 0.999);
+    const dirv = tLoc.normalize();
+    const pv = pole.clone().sub(_a).applyQuaternion(inv);
+    pv.sub(dirv.clone().multiplyScalar(pv.dot(dirv)));
+    if (pv.lengthSq() < 1e-8) pv.copy(FWD).sub(dirv.clone().multiplyScalar(FWD.dot(dirv)));
+    pv.normalize();
+    const cosA = THREE.MathUtils.clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1);
+    const sinA = Math.sqrt(1 - cosA * cosA);
+    const elbow = dirv.clone().multiplyScalar(l1 * cosA).add(pv.clone().multiplyScalar(l1 * sinA));  // rig space, from shoulder
+    const d1 = elbow.clone().normalize();
+    const fore = dirv.clone().multiplyScalar(d).sub(elbow).normalize();
+    // hinge across the bend plane, signed so the bend is a flexion
+    let h1 = d1.clone().cross(fore);
+    if (h1.lengthSq() < 1e-8) h1 = d1.clone().cross(FWD);
+    h1.normalize();
+    // upper arm: rest frame (dU, hinge) → (d1, h1)
+    const hr = R.hinge.clone().sub(R.dU.clone().multiplyScalar(R.hinge.dot(R.dU))).normalize();
+    const q0 = frameQ(R.dU, hr, new THREE.Quaternion());
+    const q1 = frameQ(d1, h1, new THREE.Quaternion());
+    const rot = q1.multiply(q0.invert());                                     // rest → posed (rig space)
+    setWorldQ(upper, _qr.copy(_qrig).multiply(rot).multiply(R.qU));
+    // forearm: carried by the upper arm, then flexed about the hinge
+    const bend = new THREE.Quaternion().setFromUnitVectors(R.dL.clone().applyQuaternion(rot), fore);
+    setWorldQ(lower, _qr.copy(_qrig).multiply(bend).multiply(rot).multiply(R.qL));
     if (w < 1) {
       upper.quaternion.copy(q0u.slerp(upper.quaternion, w));
       lower.quaternion.copy(q0l.slerp(lower.quaternion, w));
@@ -319,11 +368,30 @@ async function boot() {
     }
   }
 
-  // turn a hand so its fingers (wrist → middle-finger base) point along `dir`
-  function aimHand(hand, finger, dir, w) {
+  avatar.updateMatrixWorld(true);                        // still in the bind pose here
+  restOf(B.rArm, B.rFore, B.rHand);
+  restOf(B.lArm, B.lFore, B.lHand);
+
+  // turn a hand so its fingers (wrist → middle-finger base) point along `dir`,
+  // and (if `face` is given) roll it so the palm faces that point
+  const PALM = new Map();                                // hand → palm normal in hand space (palms down at rest)
+  for (const h of [B.rHand, B.lHand]) PALM.set(h, new THREE.Vector3(0, -1, 0).applyQuaternion(h.getWorldQuaternion(new THREE.Quaternion()).invert()));
+  function aimHand(hand, finger, dir, w, face) {
     if (w <= 0.001) return;
     hand.getWorldPosition(_a); finger.getWorldPosition(_b);
-    _q.setFromUnitVectors(_b.sub(_a).normalize(), dir);
+    const f0 = _b.clone().sub(_a).normalize();
+    _q.setFromUnitVectors(f0, dir);
+    if (face) {
+      // roll about the finger axis until the palm points at `face`
+      const palm = PALM.get(hand).clone().applyQuaternion(hand.getWorldQuaternion(_qw)).applyQuaternion(_q);
+      const want = face.clone().sub(_a);
+      want.sub(dir.clone().multiplyScalar(want.dot(dir)));
+      palm.sub(dir.clone().multiplyScalar(palm.dot(dir)));
+      if (want.lengthSq() > 1e-8 && palm.lengthSq() > 1e-8) {
+        _qs.setFromUnitVectors(palm.normalize(), want.normalize());
+        _q.premultiply(_qs);
+      }
+    }
     _qs.identity().slerp(_q, w);
     rotateBoneWorld(hand, _qs);
   }
@@ -416,25 +484,36 @@ async function boot() {
       /* IGMH: drops in from above and lands on his feet in front of the chair,
          sits back into it, types; later stands up and waves goodbye. */
       const typeT = typeClock(dt);
+      // Phones frame the office higher up to fit the duties list, leaving no
+      // room above his head: there he waves goodbye from his chair instead.
+      const sitBye = story.G.B2.y < story.G.B.y - 1;
+      const bye = s.wUp + s.wBye;
+      const sv = sitBye ? { ...s, wUp: 0, wBye: 0, tUp: 0 } : s;       // what drives the body below
       setAct('land', s.tLand, s.wLand);
       setAct('standToSit', s.tSTS, s.wSTS);
       setAct('typing', typeT, s.wType);
-      setAct('standUp', s.tUp, s.wUp);
-      // goodbye: standing idle with the right hand up, waving (the same wave as in the plane)
-      setAct('idleL', tClock % A.idle.getClip().duration, s.wBye);
-      setAct('waveR', tClock % A.wave.getClip().duration, s.wBye);
+      if (sitBye) {
+        // still seated at the keyboard; the right hand lifts off it and waves
+        setAct('typingL', typeT, bye);
+        setAct('waveR', tClock % A.wave.getClip().duration, bye);
+      } else {
+        setAct('standUp', s.tUp, s.wUp);
+        // goodbye: standing idle with the right hand up, waving (the same wave as in the plane)
+        setAct('idleL', tClock % A.idle.getClip().duration, s.wBye);
+        setAct('waveR', tClock % A.wave.getClip().duration, s.wBye);
+      }
       // travel from each clip's root curve, blended by weight; he lands FRONT
       // in front of the seat and Stand To Sit carries him back into it
       const [, zL] = rootAt('land', s.tLand);
       const [, zS] = rootAt('standToSit', s.tSTS);
-      const [, zU] = rootAt('standUp', s.tUp);
-      const wSum = s.wLand + s.wSTS + s.wType + s.wUp + s.wBye || 1;
-      const z = (s.wLand * (FRONT + zL) + s.wSTS * (FRONT + zS) + s.wUp * zU + s.wBye * UP_Z) / wSum;
+      const [, zU] = rootAt('standUp', sv.tUp);
+      const wSum = s.wLand + s.wSTS + s.wType + bye || 1;
+      const z = (s.wLand * (FRONT + zL) + s.wSTS * (FRONT + zS) + sv.wUp * zU + sv.wBye * UP_Z) / wSum;
       // Stand Up starts from a taller chair: lower him by the difference until he rises
-      const upDrop = -SEAT_DIFF * (1 - THREE.MathUtils.smoothstep(s.tUp, 1.0, 2.0)) * s.wUp / wSum;
+      const upDrop = -SEAT_DIFF * (1 - THREE.MathUtils.smoothstep(sv.tUp, 1.0, 2.0)) * sv.wUp / wSum;
       rig.position.set(SEAT.x, s.gyD + upDrop, SEAT.z + z);
       // the chair: swivels with him, and rocks as it takes his weight (3D only)
-      const seated = (s.wType + s.wSTS * THREE.MathUtils.smoothstep(s.tSTS, 1.3, 1.6) + s.wUp * (1 - THREE.MathUtils.smoothstep(s.tUp, 1.0, 1.6))) / wSum;
+      const seated = (s.wType + s.wSTS * THREE.MathUtils.smoothstep(s.tSTS, 1.3, 1.6) + (sitBye ? bye : s.wUp * (1 - THREE.MathUtils.smoothstep(s.tUp, 1.0, 1.6)))) / wSum;
       gsap.set(el.chair, { yPercent: 0.7 * s.bump, rotation: -1.2 * s.bump });
       const swivel = (gsap.getProperty(el.chair, 'rotationY') || 0) * Math.PI / 180 * seated;
       rig.rotation.set(0, swivel, THREE.MathUtils.degToRad(-1.2 * s.bump) * 0.6);
@@ -452,9 +531,7 @@ async function boot() {
     smoothPose(dt, snap);
     avatar.updateMatrixWorld(true);
     if (f === 'H') placeMask(s);
-    // face: acted expressions + blinks + a little life in the brows
-    const life = 0.07 * Math.sin(tClock * 0.63) + 0.05 * Math.sin(tClock * 1.71 + 1.3);
-    face.set({ blink: Math.max(blink(tClock), 0.4 * s.squint), smile: s.smile, brow: s.brow + life, jaw: s.jaw });
+    face.set(blink(tClock), s.smile);
   }
   let lastFrame = null;
 
@@ -532,15 +609,16 @@ async function boot() {
       // elbows: down at the pocket, lifting out to the side as the hands rise,
       // and settling down again as soon as the hands leave the ears
       const k = THREE.MathUtils.smoothstep(s.mp, 0.9, 2.2) * (1 - THREE.MathUtils.smoothstep(s.mp, 4.05, 4.9));
-      const poleRt = lerpV(s.mp < 3 ? poleR : relaxR, offsetFrom(B.rArm, -0.6, -0.35, 0.12), k);
+      const poleRt = lerpV(s.mp < 3 ? poleR : relaxR, offsetFrom(B.rArm, -0.85, -0.5, 0.05), k);   // elbows out to the side, below the shoulder
       const kl = THREE.MathUtils.smoothstep(s.lp, 1.2, 2.6) * (1 - THREE.MathUtils.smoothstep(s.lp, 4.05, 4.9));
-      const poleLt = lerpV(relaxL, offsetFrom(B.lArm, 0.6, -0.35, 0.12), kl);
+      const poleLt = lerpV(relaxL, offsetFrom(B.lArm, 0.85, -0.5, 0.05), kl);
       ik(B.rArm, B.rFore, B.rHand, rTarget, poleRt, s.wR);
       ik(B.lArm, B.lFore, B.lHand, lTarget, poleLt, s.wL);
       // fingers point up and a little back near the face, like hooking a loop behind the ear
       const up = new THREE.Vector3(0, 1, -0.35).applyQuaternion(rig.quaternion).normalize();
-      aimHand(B.rHand, B.rMid, up, s.wR * THREE.MathUtils.smoothstep(s.mp, 1.4, 2.4) * (1 - THREE.MathUtils.smoothstep(s.mp, 4.1, 4.9)));
-      aimHand(B.lHand, B.lMid, up, s.wL * THREE.MathUtils.smoothstep(s.lp, 2.0, 3.2) * (1 - THREE.MathUtils.smoothstep(s.lp, 4.1, 4.9)));
+      const headC = offsetFrom(B.head, 0, 0.02, 0.02);              // palms turn toward his head
+      aimHand(B.rHand, B.rMid, up, s.wR * THREE.MathUtils.smoothstep(s.mp, 1.4, 2.4) * (1 - THREE.MathUtils.smoothstep(s.mp, 4.1, 4.9)), headC);
+      aimHand(B.lHand, B.lMid, up, s.wL * THREE.MathUtils.smoothstep(s.lp, 2.0, 3.2) * (1 - THREE.MathUtils.smoothstep(s.lp, 4.1, 4.9)), headC);
     }
 
     // clipboard: tossed in from the right, caught, held against his chest
