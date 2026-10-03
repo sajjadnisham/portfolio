@@ -58,7 +58,6 @@ html.lenis, html.lenis body { height: auto; }
 .loader-bar { width: 140px; height: 1px; background: rgba(255,255,255,.15); overflow: hidden; }
 .loader-bar span { display: block; height: 100%; background: #fff; transform-origin: 0 50%; transform: scaleX(0); transition: transform .25s ease; }
 
-/* ---------- Logo ---------- */
 
 /* ---------- Film (pinned viewport) ---------- */
 #film {
@@ -357,4 +356,18 @@ html.lenis, html.lenis body { height: auto; }
 @media (prefers-reduced-motion: reduce) {
   .grain, .float, .prop i, .breath, .sitter, .bobber { animation: none !important; }
   .badge { transition: none; }
+}
+
+/* ---------- He reacts to the visitor (assets/js/hero3d.js) ----------
+   Drag sideways (mouse or finger) to spin him; vertical swipes still scroll.
+   With a mouse, the painted scenes drift a little against the cursor. */
+.has-3d #film { touch-action: pan-y; cursor: grab; }
+.has-3d.spinning #film { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+.has-3d #film a, .has-3d #film button { cursor: pointer; }
+.has-3d .bg-hosp, .has-3d .bg-igmh {
+  translate: calc(var(--px, 0) * -9px) calc(var(--py, 0) * -6px);
+  scale: 1.012;
+}
+@media (prefers-reduced-motion: reduce) {
+  .has-3d .bg-hosp, .has-3d .bg-igmh { translate: none; scale: none; }
 }

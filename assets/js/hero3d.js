@@ -521,6 +521,7 @@ async function boot() {
       clip.constant = -DESK_TOP_Y;                     // behind the desk
     }
 
+    rig.rotation.y += spinStep(dt);                  // the visitor can spin him (drag sideways)
     mixer.update(0);
     avatar.updateMatrixWorld(true);
     rig.updateMatrixWorld(true);
@@ -528,12 +529,105 @@ async function boot() {
     const snap = f !== lastFrame || dt <= 0 || dt > 0.25;   // new scene / first frame / resumed tab
     lastFrame = f;
     if (f === 'H') handsHospital(s);
+    lookAtPointer(s, dt, f);
     smoothPose(dt, snap);
     avatar.updateMatrixWorld(true);
     if (f === 'H') placeMask(s);
     face.set(blink(tClock), s.smile);
   }
   let lastFrame = null;
+
+  /* ---------- he reacts to the visitor: cursor / touch ---------- */
+  // Where the pointer is (client px) and when it last moved. On touch screens
+  // the finger counts while it's down and for a moment after.
+  const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ptr = { x: 0, y: 0, t: -1e9 };
+  const spin = { a: 0, v: 0, drag: false, lastX: 0, lastT: 0, released: -1e9 };
+  const now = () => performance.now() / 1000;
+  addEventListener('pointermove', (e) => {
+    ptr.x = e.clientX; ptr.y = e.clientY; ptr.t = now();
+    if (spin.drag && e.pointerId === spin.id) {
+      const t = now(), dx = e.clientX - spin.lastX;
+      const da = dx * 0.012;                                   // ~half a turn across a phone screen
+      spin.a += da;
+      spin.v = THREE.MathUtils.lerp(spin.v, da / Math.max(t - spin.lastT, 1 / 120), 0.5);
+      spin.lastX = e.clientX; spin.lastT = t;
+    }
+  }, { passive: true });
+  const film = document.getElementById('film');
+  film.addEventListener('pointerdown', (e) => {
+    if (RM || e.button > 0 || e.target.closest('a, button')) return;
+    ptr.x = e.clientX; ptr.y = e.clientY; ptr.t = now();
+    Object.assign(spin, { drag: true, id: e.pointerId, lastX: e.clientX, lastT: now(), v: 0 });
+    document.documentElement.classList.add('spinning');
+  });
+  const endDrag = (e) => {
+    if (!spin.drag || (e && e.pointerId !== spin.id)) return;
+    spin.drag = false; spin.released = now();
+    document.documentElement.classList.remove('spinning');
+  };
+  addEventListener('pointerup', endDrag);
+  addEventListener('pointercancel', endDrag);      // e.g. the browser took over for a vertical scroll
+  // free spin with momentum, then he turns back to face his scene
+  function spinStep(dt) {
+    if (spin.drag || dt <= 0) return spin.a;
+    spin.a += spin.v * dt;
+    spin.v *= Math.exp(-dt * 3.2);
+    if (now() - spin.released > 0.5 && Math.abs(spin.v) < 1.2) {
+      // shortest way back to facing front, eased like a turntable settling
+      const back = Math.atan2(Math.sin(spin.a), Math.cos(spin.a));
+      spin.a = back * Math.exp(-dt * 2.6);
+      spin.v *= Math.exp(-dt * 4);
+    }
+    return spin.a;
+  }
+
+  // Head (with a little neck and chest) turns to follow the pointer, as if it
+  // were someone just in front of the screen. Eased like a real glance;
+  // stands down while his hands or the big moves need his head.
+  const look = { yaw: 0, pitch: 0, w: 0 };
+  const _ray = new THREE.Raycaster(), _nd = new THREE.Vector2(), _pl = new THREE.Plane();
+  const _hd = new THREE.Vector3(), _cp = new THREE.Vector3(), _tgt = new THREE.Vector3();
+  const _L = new THREE.Vector3(), _R = new THREE.Vector3(), _fw = new THREE.Vector3(), _up = new THREE.Vector3();
+  const _ql = new THREE.Quaternion(), _qa = new THREE.Quaternion();
+  function lookAtPointer(s, dt, f) {
+    const cam = f === 'H' ? camH : f === 'D' ? camD : camP;
+    const busy = Math.max(s.wR, s.wL, s.wC, s.wJ, s.wLandH, f === 'D' ? s.wLand + s.wSTS : 0, s.ms > 0 && s.mc < 1 ? 1 : 0);
+    const fresh = now() - ptr.t < (matchMedia('(pointer: coarse)').matches ? 2.5 : 6);
+    const wantW = RM || spin.drag ? 0 : (fresh ? 1 : 0) * (1 - Math.min(1, busy));
+    look.w += (wantW - look.w) * (1 - Math.exp(-dt * (wantW > look.w ? 3 : 1.6)));
+    if (look.w < 0.002) return;
+
+    // the pointer as a point ~1.2 m in front of his face, toward the camera
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
+    _nd.set(((ptr.x - rect.left) / rect.width) * 2 - 1, -((ptr.y - rect.top) / rect.height) * 2 + 1);
+    B.head.getWorldPosition(_hd);
+    cam.getWorldPosition(_cp);
+    const toCam = _cp.clone().sub(_hd).normalize();
+    _pl.setFromNormalAndCoplanarPoint(toCam, _hd.clone().addScaledVector(toCam, 1.2));
+    _ray.setFromCamera(_nd, cam);
+    if (!_ray.ray.intersectPlane(_pl, _tgt)) return;
+
+    // his body's own frame: forward from the shoulder line
+    B.lArm.getWorldPosition(_L); B.rArm.getWorldPosition(_R);
+    _up.set(0, 1, 0).applyQuaternion(rig.getWorldQuaternion(_ql));
+    const side = _L.sub(_R).normalize();
+    _fw.crossVectors(side, _up).normalize();
+    const dir = _tgt.sub(_hd).normalize();
+    // signed turn about his up axis that takes his forward toward the pointer
+    const yaw = Math.atan2(_fw.clone().cross(dir).dot(_up), dir.dot(_fw));
+    const pitch = Math.asin(THREE.MathUtils.clamp(dir.dot(_up), -1, 1));
+    const yT = THREE.MathUtils.clamp(yaw, -1.0, 1.0), pT = THREE.MathUtils.clamp(pitch, -0.3, 0.3);
+    const k = 1 - Math.exp(-dt * 7);                               // a glance takes ~0.3 s
+    look.yaw += (yT - look.yaw) * k; look.pitch += (pT - look.pitch) * k;
+
+    for (const [bone, share] of [[B.spine2, 0.2], [B.neck, 0.3], [B.head, 0.5]]) {
+      _qa.setFromAxisAngle(_up, look.yaw * share * look.w);
+      _ql.setFromAxisAngle(side, -look.pitch * share * look.w);
+      rotateBoneWorld(bone, _qa.multiply(_ql));
+    }
+  }
 
   /* Pose smoothing: every bone eases toward the pose the clips and IK ask for
      (critically damped, ~45 ms). It removes pops at blends, loop seams and
@@ -653,10 +747,22 @@ async function boot() {
     if (avg > 1 / 45) { fast = 0; if (++slow >= 2 && dprCap > 1) { dprCap = 1; sizeCanvas(); } }
     else if (avg < 1 / 58) { slow = 0; if (++fast >= 6 && dprCap < DPR_MAX) { dprCap = DPR_MAX; sizeCanvas(); } }
   }
+  // mouse parallax for the painted backgrounds (styles.css reads --px/--py)
+  const fine = matchMedia('(pointer: fine)').matches && !RM;
+  const par = { x: 0, y: 0 };
+  function parallax(dt) {
+    if (!fine || ptr.t < 0) return;
+    const k = 1 - Math.exp(-dt * 3);
+    par.x += ((ptr.x / innerWidth) * 2 - 1 - par.x) * k;
+    par.y += ((ptr.y / innerHeight) * 2 - 1 - par.y) * k;
+    const st = document.documentElement.style;
+    st.setProperty('--px', par.x.toFixed(4)); st.setProperty('--py', par.y.toFixed(4));
+  }
   function loop() {
     if (!running) return;
     const dt = Math.min(clock.getDelta(), 0.1);
     tClock += dt;
+    parallax(dt);
     pose(dt);
     const cam = frame === 'H' ? camH : frame === 'D' ? camD : camP;
     renderer.render(SC[frame], cam);
