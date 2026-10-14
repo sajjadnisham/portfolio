@@ -29,7 +29,7 @@
 
   const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
   // keep in sync with the desktop media query in styles.css
-  const DESKTOP_Q = matchMedia('(min-width: 1200px), (min-width: 900px) and (min-aspect-ratio: 13/10)');
+  const DESKTOP_Q = matchMedia('(min-width: 1200px), (min-width: 560px) and (min-aspect-ratio: 13/10)');
   const RATIO = 941 / 1672;        // storyboard canvas
   const M = RM ? 0 : 1;            // motion multiplier: reduced motion → fades only
   // blur-to-sharp text is costly to repaint on phones; keep it for larger screens
@@ -273,7 +273,7 @@
     act.set(poses[i], { opacity: 0 }, `hosp+=${mt + 0.09}`);
     act.to(hero, { y: 3, duration: 0.1, yoyo: true, repeat: 1, ease: 'sine.inOut' }, `hosp+=${mt}`);   // weight follows the arms
   });
-  act.addLabel('mask', `hosp+=${Math.max(mt + 0.55, 3.2)}`);
+  act.addLabel('mask', `hosp+=${Math.max(mt + 0.55, 5.3)}`);
 
   /* --- S5 · a file is tossed in; he catches it --- */
   act.set(files, { opacity: 1 }, 'mask');
@@ -345,7 +345,7 @@
     tLandH: 0, wLandH: 1, gyH: 1.8,                                                   // intro: falls from the sky
     wIdle: 0, tTW: 0, wTW: 0, tWA: WA_PHASE, waStart: WA_PHASE + 0.25, waEnd: WA_PHASE + WALK_T,   // hospital walk
     wWA: 0, tTB: 0, wTB: 0, drift: 0, recoil: 0,
-    mp: 0, lp: 0, wR: 0, wL: 0, ms: 0, mc: 0,                                          // mask
+    mp: 0, wR: 0, wL: 0, ms: 0, mc: 0,                                               // mask
     cp: 0, cw: 0, wC: 0,                                                               // clipboard
     tJ: 0.35, wJ: 0, gyP: 0,                                                           // jump from the plane
     tLand: 0, wLand: 1, gyD: 1.4, tSTS: 0, wSTS: 0, wType: 0, bump: 0,                 // land, sit, type
@@ -365,20 +365,19 @@
   x3({ tTB: 2.7, duration: 2.7 }, 2.45 + WALK_T - 0.27);
   x3({ wTB: 0, wIdle: 1, duration: 0.6, ease: 'sine.inOut' }, 2.45 + WALK_T + 2.13);
   // S4 · mask: hand to pocket, mask out, up to his face, loops over the ears, hands down
-  // (mp/lp are positions along each hand's path, see handsHospital in hero3d.js:
-  //  mp 0 rest · 1 pocket · 2 chin · 3 cheek · 4 ear · 5 jaw · 6 in front · 7 rest;
-  //  lp 0 rest · 1 in front · 2 chest · 3 cheek · 4 ear · 5 jaw · 6 in front · 7 rest.)
-  // One flowing reach per hand: accelerate out, ease into the target, no stop-start.
-  x3({ wR: 1, duration: 0.2, ease: 'sine.inOut' }, 'hosp');
-  x3({ mp: 1, duration: 0.6, ease: 'sine.inOut' }, 'hosp');                   // into the pocket
-  x3({ ms: 1, duration: 0.15 }, 'hosp+=0.5');                                   // grips the mask
-  x3({ mp: 4, duration: 1.3, ease: 'power1.inOut' }, 'hosp+=0.72');            // up, onto the face, loop over the ear
-  x3({ mc: 1, duration: 0.55, ease: 'sine.inOut' }, 'hosp+=1.2');              // the mask settles on his face
-  x3({ wL: 1, duration: 0.25, ease: 'sine.inOut' }, 'hosp+=0.95');
-  x3({ lp: 4, duration: 1.0, ease: 'sine.inOut' }, 'hosp+=0.98');              // other hand to the other ear
-  x3({ mp: 7, duration: 0.9, ease: 'sine.inOut' }, 'hosp+=2.12');             // hands run down the jaw and drop
-  x3({ lp: 7, duration: 0.9, ease: 'sine.inOut' }, 'hosp+=2.04');
-  x3({ wR: 0, wL: 0, duration: 0.2, ease: 'sine.inOut' }, 'hosp+=3.0');
+  // Two-handed, as in a real mask-on (mp = position along both hands' mirrored
+  // path: 0 rest · 1 waist · 2 chest · 3 face · 4 ears · 5 nose · 6 chin · 7 rest).
+  x3({ wR: 1, wL: 1, duration: 0.25, ease: 'sine.inOut' }, 'hosp');
+  x3({ mp: 1, duration: 0.6, ease: 'sine.inOut' }, 'hosp');                  // hands meet at his waist, holding the loops
+  x3({ ms: 1, duration: 0.25, ease: 'sine.out' }, 'hosp+=0.4');               // …the mask opens out between them
+  x3({ mp: 1.15, duration: 0.45, ease: 'sine.inOut' }, 'hosp+=0.6');          // spreads it
+  x3({ mp: 3, duration: 0.9, ease: 'power1.inOut' }, 'hosp+=1.05');           // lifts it to his face
+  x3({ mc: 1, duration: 0.45, ease: 'sine.inOut' }, 'hosp+=1.5');
+  x3({ mp: 4, duration: 0.6, ease: 'sine.inOut' }, 'hosp+=2.0');              // hooks both loops over his ears
+  x3({ mp: 5, duration: 0.55, ease: 'sine.inOut' }, 'hosp+=2.8');             // pinches the nose bridge
+  x3({ mp: 6, duration: 0.45, ease: 'sine.inOut' }, 'hosp+=3.7');             // pulls it under his chin
+  x3({ mp: 7, duration: 0.7, ease: 'sine.inOut' }, 'hosp+=4.3');              // hands down
+  x3({ wR: 0, wL: 0, duration: 0.2, ease: 'sine.inOut' }, 'hosp+=5.0');
   // S5 · clipboard tossed in, caught with a little recoil, brought to his chest
   act.set(S3D, { cw: 1 }, 'mask');
   x3({ cp: 1, duration: 0.75 }, 'mask');

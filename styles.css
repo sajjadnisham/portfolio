@@ -19,7 +19,7 @@
 }
 
 /* Desktop (16:9) — keep this query in sync with DESKTOP_Q in script.js */
-@media (min-width: 1200px), (min-width: 900px) and (min-aspect-ratio: 13/10) {
+@media (min-width: 1200px), (min-width: 560px) and (min-aspect-ratio: 13/10) {
   :root {
     --gut: 7vw;
     --fs-h: clamp(34px, 3.2vw, 56px);
@@ -179,7 +179,7 @@ html.lenis, html.lenis body { height: auto; }
 }
 @keyframes spin { to { rotate: 360deg; } }
 
-@media (min-width: 1200px), (min-width: 900px) and (min-aspect-ratio: 13/10) {
+@media (min-width: 1200px), (min-width: 560px) and (min-aspect-ratio: 13/10) {
   .flight { --fw: min(42vw, 74vh); top: 10%; }
 }
 @media (min-width: 769px) and (max-aspect-ratio: 13/10) {
@@ -263,7 +263,7 @@ html.lenis, html.lenis body { height: auto; }
 }
 
 /* Desktop copy: left 40% column, vertically centred */
-@media (min-width: 1200px), (min-width: 900px) and (min-aspect-ratio: 13/10) {
+@media (min-width: 1200px), (min-width: 560px) and (min-aspect-ratio: 13/10) {
   .ambient, .shade { display: block; }
   .stage {
     -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12%, #000 94%, transparent 100%);
@@ -287,7 +287,7 @@ html.lenis, html.lenis body { height: auto; }
   --orb: min(66vw, 46svh, 520px);
   --ico: clamp(54px, calc(var(--orb) * .25), 84px);
 }
-@media (min-width: 1200px), (min-width: 900px) and (min-aspect-ratio: 13/10) {
+@media (min-width: 1200px), (min-width: 560px) and (min-aspect-ratio: 13/10) {
   .connect { --orb: min(50vh, 520px); --ico: clamp(64px, calc(var(--orb) * .2), 80px); }
 }
 .orbit { position: relative; width: var(--orb); aspect-ratio: 1; }
@@ -370,4 +370,13 @@ html.lenis, html.lenis body { height: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .has-3d .bg-hosp, .has-3d .bg-igmh { translate: none; scale: none; }
+}
+.has-3d.grabbing #film { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+
+/* ---------- Short landscape screens (phones turned sideways) ---------- */
+@media (max-height: 560px) and (min-aspect-ratio: 13/10) {
+  .connect { --orb: min(40vh, 300px); --ico: clamp(40px, 11vh, 56px); }
+  .connect-label { bottom: max(28px, calc(50% - var(--orb) / 2 - var(--ico) - 2.4em)); }
+  .c-maldives { bottom: 4%; }
+  .foot { bottom: 6px; }
 }
