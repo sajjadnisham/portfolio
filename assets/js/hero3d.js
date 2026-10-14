@@ -662,7 +662,7 @@ async function boot() {
     return Math.hypot(cx - (a[0] + abx * t), cy - (a[1] + aby * t)) < r + Math.hypot(abx, aby) * 0.06 * (1 - t);
   }
   // feed the springs and bend him with them (after the clips and IK)
-  const _hv = new THREE.Vector3(), _hp0 = new THREE.Vector3(), _hvel = new THREE.Vector3(), _camDir = new THREE.Vector3();
+  const _hv = new THREE.Vector3(), _hp0 = new THREE.Vector3(), _hvel = new THREE.Vector3(), _hacc = new THREE.Vector3(), _camDir = new THREE.Vector3();
   let haveHip = false;
   function respond(s, dt, f) {
     if (RM) return;
@@ -677,9 +677,14 @@ async function boot() {
     // follow-through: his head lags behind sudden body moves
     B.hips.getWorldPosition(_hv);
     if (haveHip && dt > 0) {
+      // velocity and acceleration are low-pass filtered (raw frame-to-frame
+      // differences are noisy and would make the head jitter)
       const vel = _hv.clone().sub(_hp0).divideScalar(dt);
-      const acc = vel.clone().sub(_hvel).divideScalar(Math.max(dt, 1 / 120));
-      _hvel.lerp(vel, 0.5);
+      const kv = 1 - Math.exp(-dt / 0.06);
+      const prevVel = _hvel.clone();
+      _hvel.lerp(vel, kv);
+      _hacc.lerp(_hvel.clone().sub(prevVel).divideScalar(dt), 1 - Math.exp(-dt / 0.08));
+      const acc = _hacc.clone();
       const inv = rig.getWorldQuaternion(new THREE.Quaternion()).invert();
       acc.applyQuaternion(inv);
       target.hx = THREE.MathUtils.clamp(-acc.x * 0.006, -0.12, 0.12);
@@ -765,21 +770,30 @@ async function boot() {
      IK weight changes without making him feel laggy. */
   const bones = [];
   avatar.traverse((o) => { if (o.isBone) bones.push(o); });
-  const prevQ = new Float32Array(bones.length * 4);
-  const prevHips = new THREE.Vector3();
-  const _qsm = new THREE.Quaternion();
+  // Two filter stages in series (a critically damped, 2nd-order smoother):
+  // the pose is continuous AND so is its speed, so every move eases in and
+  // out instead of changing pace abruptly. ~30 ms per stage.
+  const prevQ = new Float32Array(bones.length * 4), prevQ2 = new Float32Array(bones.length * 4);
+  const prevHips = new THREE.Vector3(), prevHips2 = new THREE.Vector3();
+  const _qsm = new THREE.Quaternion(), _qs2 = new THREE.Quaternion();
   let havePrev = false;
   function smoothPose(dt, snap) {
     if (!snap && havePrev) {
-      const k = 1 - Math.exp(-dt / (0.045 + 0.3 * jumpBlend));   // ~45 ms; longer right after a jump
+      const k = 1 - Math.exp(-dt / (0.03 + 0.2 * jumpBlend));    // longer right after a jump
       for (let i = 0; i < bones.length; i++) {
-        _qsm.fromArray(prevQ, i * 4).slerp(bones[i].quaternion, k);
-        bones[i].quaternion.copy(_qsm);
+        _qsm.fromArray(prevQ, i * 4).slerp(bones[i].quaternion, k);   // stage 1
+        _qsm.toArray(prevQ, i * 4);
+        _qs2.fromArray(prevQ2, i * 4).slerp(_qsm, k);                // stage 2
+        _qs2.toArray(prevQ2, i * 4);
+        bones[i].quaternion.copy(_qs2);
       }
-      B.hips.position.lerpVectors(prevHips, B.hips.position, k);
+      prevHips.lerp(B.hips.position, k);
+      prevHips2.lerp(prevHips, k);
+      B.hips.position.copy(prevHips2);
+    } else {
+      for (let i = 0; i < bones.length; i++) { bones[i].quaternion.toArray(prevQ, i * 4); bones[i].quaternion.toArray(prevQ2, i * 4); }
+      prevHips.copy(B.hips.position); prevHips2.copy(B.hips.position);
     }
-    for (let i = 0; i < bones.length; i++) bones[i].quaternion.toArray(prevQ, i * 4);
-    prevHips.copy(B.hips.position);
     havePrev = true;
   }
 
@@ -859,13 +873,14 @@ async function boot() {
   let running = true;
   document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) clock.getDelta(); });
   // adaptive resolution: if the device can't hold ~45 fps, render at 1× until it can
-  let ft = 0, fn = 0, slow = 0, fast = 0;
+  let ft = 0, fn = 0, slow = 0;
   function adapt(dt) {
     ft += dt; fn++;
     if (fn < 45) return;
     const avg = ft / fn; ft = 0; fn = 0;
-    if (avg > 1 / 45) { fast = 0; if (++slow >= 2 && dprCap > 1) { dprCap = 1; sizeCanvas(); } }
-    else if (avg < 1 / 58) { slow = 0; if (++fast >= 6 && dprCap < DPR_MAX) { dprCap = DPR_MAX; sizeCanvas(); } }
+    // step down once on a device that can't keep up; never flip back and forth
+    // (each change is a visible pop)
+    if (avg > 1 / 45) { if (++slow >= 2 && dprCap > 1) { dprCap = 1; sizeCanvas(); } } else slow = 0;
   }
   // mouse parallax for the painted backgrounds (styles.css reads --px/--py)
   const fine = matchMedia('(pointer: fine)').matches && !RM;
