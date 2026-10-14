@@ -48,10 +48,10 @@ async function boot() {
   canvas.setAttribute('aria-hidden', 'true');
 
   /* ---------- assets ---------- */
-  const [gltf, moves, coatMap] = await Promise.all([
-    new GLTFLoader().loadAsync(`assets/3d/nisham.glb?v=${V}`),
+  const [gltf, moves, { buildCartoon, blinker }] = await Promise.all([
+    new GLTFLoader().loadAsync(`assets/3d/nisham.glb?v=${V}`),              // the animated skeleton
     fetch(`assets/3d/moves.json?v=${V}`).then((r) => { if (!r.ok) throw new Error('moves ' + r.status); return r.json(); }),
-    new THREE.TextureLoader().loadAsync(`assets/3d/coat.webp?v=${V}`),   // white shirt, charcoal trousers (tools/make_coat.py)
+    import(`./cartoon.js?v=${V}`),                                           // his cartoon look, modelled in code
   ]);
 
   const avatar = gltf.scene;
@@ -65,6 +65,11 @@ async function boot() {
     rMid: bone('RightHandMiddle1'), lMid: bone('LeftHandMiddle1'),
   };
 
+  // the cartoon character, built around the skeleton in its rest pose
+  const toon = buildCartoon(avatar);
+  const face = toon.face;
+  const blink = blinker();
+
   // one clipping plane shared by every material (cockpit rim / desk top)
   const clip = new THREE.Plane(new THREE.Vector3(0, 1, 0), 1e6);
   avatar.traverse((o) => {
@@ -73,23 +78,6 @@ async function boot() {
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     mats.forEach((m) => { m.clippingPlanes = [clip]; });
   });
-
-  /* ---------- pharmacist's outfit: clean white shirt, charcoal trousers ---------- */
-  const outfit = avatar.getObjectByName('avaturn_look_0');
-  if (outfit) {
-    coatMap.colorSpace = THREE.SRGBColorSpace;
-    coatMap.flipY = false;                          // glTF texture convention
-    const m = outfit.material;
-    coatMap.channel = m.map ? m.map.channel : 0;
-    m.map = coatMap;
-    if (m.normalScale) m.normalScale.setScalar(0.35);   // soften the denim weave into cotton
-    m.needsUpdate = true;
-  }
-  /* ---------- face: blink + smile (morph targets built from the head mesh) ---------- */
-  const { buildFace, blinker } = await import(`./face.js?v=${V}`);
-  const body = avatar.getObjectByName('avaturn_body');
-  const face = body ? buildFace(body) : { set() {} };
-  const blink = blinker();
 
   /* ---------- clips ---------- */
   const mixer = new THREE.AnimationMixer(avatar);
@@ -184,7 +172,12 @@ async function boot() {
       mask.add(strap);
     }
   }
-  const MASK_FIT = { y: 0.016, z: 0.038 };
+  // the mask sits over the cartoon face's nose-to-chin, sized to his big head,
+  // and once on it turns with his head (offset/rotation in Head-bone space,
+  // measured in the rest pose)
+  const MASK_SCALE = 1.29 * toon.head.scale;
+  const MASK_LOCAL = (() => { const c = B.head.localToWorld(toon.head.centre.clone()); c.y -= 0.058 * toon.head.scale; return B.head.worldToLocal(c); })();
+  const HEAD_QC = toon.headRestQ.clone().invert();
   const board = new THREE.Group();
   {
     const back = new THREE.Mesh(new THREE.BoxGeometry(0.235, 0.32, 0.012), new THREE.MeshStandardMaterial({ color: 0x27303d, roughness: 0.6 }));
@@ -534,6 +527,7 @@ async function boot() {
     avatar.updateMatrixWorld(true);
     if (f === 'H') placeMask(s);
     face.set(blink(tClock), s.smile);
+    face.masked(f === 'H' && mask.visible && s.mc > 0.55);
   }
   let lastFrame = null;
 
@@ -660,10 +654,11 @@ async function boot() {
     // held a little past the knuckles, just in front of the palm
     const inHand = wrist.lerp(knuckle, 1.25).add(new THREE.Vector3(0, 0, 0.03).applyQuaternion(rig.quaternion));
     // the arc's centre sits inside the head, so its surface lands on the face
-    const onFace = offsetFrom(B.head, 0, MASK_FIT.y, MASK_FIT.z);
+    const onFace = B.head.localToWorld(MASK_LOCAL.clone());
     mask.position.copy(lerpV(inHand, onFace, s.mc));
-    mask.quaternion.copy(rig.getWorldQuaternion(new THREE.Quaternion()));
-    mask.scale.setScalar(Math.max(0.001, s.ms));
+    const qFace = B.head.getWorldQuaternion(new THREE.Quaternion()).multiply(HEAD_QC);
+    mask.quaternion.copy(rig.getWorldQuaternion(new THREE.Quaternion())).slerp(qFace, s.mc);
+    mask.scale.setScalar(Math.max(0.001, s.ms) * MASK_SCALE);
     mask.visible = true;
   }
 
@@ -684,16 +679,16 @@ async function boot() {
       const restL = B.lHand.getWorldPosition(new THREE.Vector3());
       const pocket = offsetFrom(B.hips, -0.19, -0.08, 0.1);
       const liftR = offsetFrom(B.spine2, -0.13, -0.02, 0.32);
-      const chin = offsetFrom(B.head, -0.04, -0.09, 0.2);
-      const cheekR = offsetFrom(B.head, -0.14, -0.1, 0.1);
-      const earR = offsetFrom(B.head, -0.13, -0.08, -0.01);
-      const jawR = offsetFrom(B.head, -0.13, -0.27, 0.15);          // in front of the shoulder on the way down
+      const chin = offsetFrom(B.head, -0.045, -0.05, 0.24);   // (around the cartoon head)
+      const cheekR = offsetFrom(B.head, -0.19, -0.06, 0.13);
+      const earR = offsetFrom(B.head, -0.18, -0.03, 0.0);
+      const jawR = offsetFrom(B.head, -0.15, -0.24, 0.17);          // in front of the shoulder on the way down
       const dropR = offsetFrom(B.spine2, -0.15, -0.3, 0.27);
       const bellyL = offsetFrom(B.spine2, 0.14, -0.3, 0.27);
       const liftL = offsetFrom(B.spine2, 0.16, 0.0, 0.3);
-      const cheekL = offsetFrom(B.head, 0.15, -0.12, 0.12);
-      const earL = offsetFrom(B.head, 0.13, -0.08, -0.01);
-      const jawL = offsetFrom(B.head, 0.13, -0.27, 0.15);
+      const cheekL = offsetFrom(B.head, 0.2, -0.08, 0.15);
+      const earL = offsetFrom(B.head, 0.18, -0.03, 0.0);
+      const jawL = offsetFrom(B.head, 0.15, -0.24, 0.17);
       const dropL = offsetFrom(B.spine2, 0.15, -0.3, 0.27);
       // knots: rest 0 · pocket 1 · lift 1.5 · chin 2 · cheek 3 · ear 4 · jaw 5 · drop 6 · rest 7
       const mp = s.mp < 1 ? s.mp : s.mp < 2 ? 1 + (s.mp - 1) * 2 : s.mp + 1;
@@ -710,7 +705,7 @@ async function boot() {
       ik(B.lArm, B.lFore, B.lHand, lTarget, poleLt, s.wL);
       // fingers point up and a little back near the face, like hooking a loop behind the ear
       const up = new THREE.Vector3(0, 1, -0.35).applyQuaternion(rig.quaternion).normalize();
-      const headC = offsetFrom(B.head, 0, 0.02, 0.02);              // palms turn toward his head
+      const headC = offsetFrom(B.head, 0, 0.12, 0.035);              // palms turn toward his head
       aimHand(B.rHand, B.rMid, up, s.wR * THREE.MathUtils.smoothstep(s.mp, 1.4, 2.4) * (1 - THREE.MathUtils.smoothstep(s.mp, 4.1, 4.9)), headC);
       aimHand(B.lHand, B.lMid, up, s.wL * THREE.MathUtils.smoothstep(s.lp, 2.0, 3.2) * (1 - THREE.MathUtils.smoothstep(s.lp, 4.1, 4.9)), headC);
     }

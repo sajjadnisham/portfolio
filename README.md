@@ -54,17 +54,18 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
 
 `assets/js/hero3d.js` (three.js, vendored in `assets/vendor/three/`) renders Nisham's avatar into the illustrated scenes.
 
-- **Avatar:** `assets/3d/nisham.glb`, made with Avaturn and optimised (WebP textures, quantised mesh, 1.9 MB). The original export is in `tools/source/3d/avatar.glb`.
+- **Character:** a cartoon Nisham modelled in code (`assets/js/cartoon.js`): big friendly head with short curly hair, full beard and moustache, thick brows and warm brown skin; a knee-length white lab coat (lapels, buttons, pockets, a pen in the breast pocket), charcoal trousers and black shoes. The coat, sleeves, trousers and neck are skinned to the skeleton, with weights blended across each joint so they bend smoothly; the head, hands, fingers and shoes ride their bones. The coat's front follows his thighs when he strides or sits, and its back stays with his hips. Colours and sizes are at the top of `cartoon.js`.
+- **Skeleton:** `assets/3d/nisham.glb` (0.46 MB) is the animated skeleton from the Avaturn avatar, stripped of its textures and extra meshes by `tools/make_skeleton.py`.
 - **Moves:** Mixamo clips (idle, turn-and-walk, walk, pilot, wave, jump, Landing, Stand To Sit, Type To Sit, Stand Up) (`tools/source/3d/*.fbx`) baked into `assets/3d/moves.json` by `node tools/bake-moves.js` (needs a static server on port 8765 and Playwright).
 - **One renderer, three places:** its canvas moves into the hospital scene, the cockpit, or between the office chair and the desk. The painted layers around it still cover him correctly (behind the desk and laptop, legs hidden in the fuselage).
 - **Matched perspective:** each painting gets a camera tuned to its horizon and eye height, so he stands on the painted road at the right size wherever he walks.
 - **Choreography:** his acting is tweened on the shared `act` timeline (the `S3D` object in `script.js`), so it stays in sync with the props and plays backwards when scrolling up. Scrolling past several scenes at once jumps straight to the latest moment, and scrolling back rewinds quickly, so props from one scene never linger on another page.
-- **Face:** the Avaturn export has no facial blendshapes, so `assets/js/face.js` builds two from the head mesh at load: **blink** (natural random blinks) and **smile** (after landing, on his mark, at the keyboard, and for goodbye). The feature positions at the top of `face.js` must be re-measured for a different avatar.
+- **Face:** natural random blinks (the eyelids roll down), and a smile that curves the mouth and lifts the brows: after landing, on his mark, at the keyboard, and for goodbye. Under the surgical mask the nose, mouth and moustache are hidden so nothing pokes through.
 - **Hands:** the mask and the clipboard use an anatomical two-bone IK solver: the elbow is treated as a hinge, and the upper arm twists so the elbow only ever bends the natural way. Each hand follows one smooth spline path (centripetal Catmull-Rom) through waypoints that move with his body, and the elbow direction blends continuously, so the reach flows like a real one (`handsHospital`).
 - **He reacts to you:** his head (with a little neck and chest) turns to follow the cursor, or your finger on a phone, as if you were just in front of the screen. Drag sideways, with the mouse or a finger, to spin him around; he keeps the momentum, then turns back to his scene. Vertical swipes still scroll. With a mouse, the painted backgrounds drift slightly against the cursor. All of this stands down while his hands are busy, and is off with reduced motion (`lookAtPointer`, `spinStep` in `hero3d.js`).
 - **Fallback:** without WebGL, or if the 3D files fail to load within 15 s, the illustrated 2D character plays instead.
 - **Tuning:** placements are in `hero3d.js` (`MARK`, `P0` (where he lands), `SEAT`, `COCKPIT`, `MASK_FIT`). Timings are in the `S3D` block of `script.js`.
-- **Outfit:** `tools/make_coat.py` repaints the outfit texture into `assets/3d/coat.webp`: the white shirt is cleaned up and the blue jeans become charcoal trousers.
+- **Mask:** sized to the cartoon head and, once on, it turns with his head.
 - **Smoothness:**
   - Blends between moves are eased.
   - The walk loop starts at the phase whose legs match the end of the turn (`WA_PHASE` in `script.js`).
@@ -72,7 +73,7 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
   - Shaders are compiled at load, so switching scenes doesn't hitch.
   - Rendering is capped at 1.5×, and drops to 1× on devices that can't hold about 45 fps.
   - Phones skip the costly blur-to-sharp text effect.
-- **Changing the outfit:** export a new avatar from Avaturn, then run `gltf-transform webp`, `quantize` and `prune` on it, and save it as `assets/3d/nisham.glb`.
+- **Changing the look:** edit `assets/js/cartoon.js` (the `COL` colours, the coat profile, the head size `HEAD_K`). To use a rigged 3D model from another tool instead, it needs a Mixamo-style humanoid skeleton.
 - **Final round photo:** `tools/make_avatar.py` crops `tools/source/photo.webp` (cyan backdrop kept) into `assets/img/avatar.webp`.
 
 ## Artwork
