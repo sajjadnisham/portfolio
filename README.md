@@ -44,9 +44,8 @@ There are two timelines in `script.js`:
 | 5.1 | NABH | a clipboard is tossed in on an arc; he reaches, catches it and holds it to his chest; "(NABH)" appears on the sign letter by letter |
 | 7.1 | Maldives | plane flies in; he pilots with one hand and waves with the other |
 | 8.95 | NURF Pharmacy, IGMH | crouches, leaps out of the cockpit (the plane flies on), drops in as IGMH rises and lands on his feet, sits back into his chair (it rocks under him), starts typing |
-| 11.6 | Responsibilities | he types and swivels with the chair; the seven duties appear one by one and stay until the Connect page |
-| 14.8 | Goodbye | waves goodbye with a smile: standing up on desktop, from his chair on phones (the phone layout has no room above his head) |
-| 16.0 | Connect | everything lifts away, the social-link orbit draws in |
+| 11.6 | Responsibilities | he works at his laptop (typing in natural bursts) and swivels with the chair, right through to the end; the seven duties appear one by one and stay until the Connect page |
+| 15.2 | Connect | everything lifts away, the social-link orbit draws in |
 
 Between moments he is never frozen: idle, piloting and sitting loops keep running.
 
@@ -68,6 +67,7 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
 - **Tuning:** placements are in `hero3d.js` (`MARK`, `P0` (where he lands), `SEAT`, `COCKPIT`, `MASK_FIT`). Timings are in the `S3D` block of `script.js`.
 - **Mask:** sized to the cartoon head and, once on, it turns with his head.
 - **Smoothness:**
+  - When a fast scroll jumps his acting ahead, his pose and position blend into the new moment over ~0.35 s instead of snapping.
   - Blends between moves are eased.
   - The walk loop starts at the phase whose legs match the end of the turn (`WA_PHASE` in `script.js`).
   - A pose filter eases every bone toward its target (about 45 ms), which removes pops at blends, loop seams and IK changes (`smoothPose`).

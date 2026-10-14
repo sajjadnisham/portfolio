@@ -126,8 +126,6 @@ async function boot() {
   const only = (c, keep, name) => new THREE.AnimationClip(name, c.duration, c.tracks.filter((t) => keep(t.name)));
   addAction('pilotL', only(A.pilot.getClip(), (n) => !RIGHT_ARM.test(n), 'pilotL'));
   addAction('waveR', only(A.wave.getClip(), (n) => RIGHT_ARM.test(n), 'waveR'));
-  addAction('idleL', only(A.idle.getClip(), (n) => !RIGHT_ARM.test(n), 'idleL'));
-  addAction('typingL', only(A.typing.getClip(), (n) => !RIGHT_ARM.test(n), 'typingL'));   // typing, right hand free   // standing, right arm free to wave
   addAction('walkB', makeClip('walk', true));           // walking away from camera
 
   const rootAt = (key, t) => {
@@ -431,17 +429,25 @@ async function boot() {
   // typing: the short clip ping-pongs gently (a straight loop would snap at the seam)
   let typeT = 0;
   const typeDur = moves.clips.typing.d;
-  const typeClock = (dt) => { typeT += dt * 0.8; const k = typeT % (2 * typeDur); return k < typeDur ? k : 2 * typeDur - k; };
+  // typing: the short clip ping-pongs gently (a straight loop would snap at the
+  // seam), at a speed that drifts like real typing — bursts and slower patches
+  const typeClock = (dt) => {
+    const speed = 0.78 + 0.14 * Math.sin(tClock * 0.37) + 0.06 * Math.sin(tClock * 1.31 + 1);
+    typeT += dt * speed;
+    const k = typeT % (2 * typeDur); return k < typeDur ? k : 2 * typeDur - k;
+  };
   const FRONT = -(root.standToSit ? root.standToSit[root.standToSit.length - 1][2] - root.standToSit[0][2] : -0.44);   // ~0.44 m
-  const UP_Z = rootAt('standUp', 2.3)[1];      // where script.js stops the Stand Up clip
   const hipsAt = (k, i) => moves.clips[k].tracks.find((t) => t.n === 'Hips.position').v[i * 3 + 1];
-  const SEAT_DIFF = hipsAt('standUp', 0) - hipsAt('typing', 0);                // ~0.2 m
   const setAct = (name, time, weight) => { const a = A[name]; a.time = time; a.weight = weight; };
 
   function pose(dt = 0) {
     const s = S3D;
     const scrollT = tl.time();
     const actT = act.time();
+    // a fast scroll can jump the acting ahead: blend into the new pose instead of snapping
+    if (lastActT !== null && Math.abs(actT - lastActT) > 0.3) jumpBlend = 1;
+    lastActT = actT;
+    jumpBlend *= Math.exp(-dt * 3.5);
     const J = act.labels.files;
 
     // which painted frame is he in?
@@ -492,38 +498,20 @@ async function boot() {
       clip.constant = -RIM_Y;                         // nothing below the cockpit rim: legs appear as they clear it
     } else {
       /* IGMH: drops in from above and lands on his feet in front of the chair,
-         sits back into it, types; later stands up and waves goodbye. */
+         sits back into it, and works at his laptop until the end. */
       const typeT = typeClock(dt);
-      // Phones frame the office higher up to fit the duties list, leaving no
-      // room above his head: there he waves goodbye from his chair instead.
-      const sitBye = story.G.B2.y < story.G.B.y - 1;
-      const bye = s.wUp + s.wBye;
-      const sv = sitBye ? { ...s, wUp: 0, wBye: 0, tUp: 0 } : s;       // what drives the body below
       setAct('land', s.tLand, s.wLand);
       setAct('standToSit', s.tSTS, s.wSTS);
       setAct('typing', typeT, s.wType);
-      if (sitBye) {
-        // still seated at the keyboard; the right hand lifts off it and waves
-        setAct('typingL', typeT, bye);
-        setAct('waveR', tClock % A.wave.getClip().duration, bye);
-      } else {
-        setAct('standUp', s.tUp, s.wUp);
-        // goodbye: standing idle with the right hand up, waving (the same wave as in the plane)
-        setAct('idleL', tClock % A.idle.getClip().duration, s.wBye);
-        setAct('waveR', tClock % A.wave.getClip().duration, s.wBye);
-      }
       // travel from each clip's root curve, blended by weight; he lands FRONT
       // in front of the seat and Stand To Sit carries him back into it
       const [, zL] = rootAt('land', s.tLand);
       const [, zS] = rootAt('standToSit', s.tSTS);
-      const [, zU] = rootAt('standUp', sv.tUp);
-      const wSum = s.wLand + s.wSTS + s.wType + bye || 1;
-      const z = (s.wLand * (FRONT + zL) + s.wSTS * (FRONT + zS) + sv.wUp * zU + sv.wBye * UP_Z) / wSum;
-      // Stand Up starts from a taller chair: lower him by the difference until he rises
-      const upDrop = -SEAT_DIFF * (1 - THREE.MathUtils.smoothstep(sv.tUp, 1.0, 2.0)) * sv.wUp / wSum;
-      rig.position.set(SEAT.x, s.gyD + upDrop, SEAT.z + z);
+      const wSum = s.wLand + s.wSTS + s.wType || 1;
+      const z = (s.wLand * (FRONT + zL) + s.wSTS * (FRONT + zS)) / wSum;
+      rig.position.set(SEAT.x, s.gyD, SEAT.z + z);
       // the chair: swivels with him, and rocks as it takes his weight (3D only)
-      const seated = (s.wType + s.wSTS * THREE.MathUtils.smoothstep(s.tSTS, 1.3, 1.6) + (sitBye ? bye : s.wUp * (1 - THREE.MathUtils.smoothstep(s.tUp, 1.0, 1.6)))) / wSum;
+      const seated = (s.wType + s.wSTS * THREE.MathUtils.smoothstep(s.tSTS, 1.3, 1.6)) / wSum;
       gsap.set(el.chair, { yPercent: 0.7 * s.bump, rotation: -1.2 * s.bump });
       const swivel = (gsap.getProperty(el.chair, 'rotationY') || 0) * Math.PI / 180 * seated;
       rig.rotation.set(0, swivel, THREE.MathUtils.degToRad(-1.2 * s.bump) * 0.6);
@@ -532,6 +520,13 @@ async function boot() {
     }
 
     rig.rotation.y += spinStep(dt);                  // the visitor can spin him (drag sideways)
+    // after a jump (same scene), his position eases over too
+    if (f === lastFrame && dt > 0 && dt <= 0.25 && jumpBlend > 0.01) {
+      const k = 1 - Math.exp(-dt / (0.045 + 0.3 * jumpBlend));
+      rig.position.lerpVectors(prevRigP, rig.position, k);
+      rig.quaternion.copy(prevRigQ.clone().slerp(rig.quaternion, k));
+    }
+    prevRigP.copy(rig.position); prevRigQ.copy(rig.quaternion);
     mixer.update(0);
     avatar.updateMatrixWorld(true);
     rig.updateMatrixWorld(true);
@@ -548,6 +543,8 @@ async function boot() {
     face.masked(f === 'H' && mask.visible && s.mc > 0.55);
   }
   let lastFrame = null;
+  let lastActT = null, jumpBlend = 0;
+  const prevRigP = new THREE.Vector3(), prevRigQ = new THREE.Quaternion();
 
   /* ---------- he reacts to the visitor: cursor / touch ---------- */
   // Where the pointer is (client px) and when it last moved. On touch screens
@@ -774,7 +771,7 @@ async function boot() {
   let havePrev = false;
   function smoothPose(dt, snap) {
     if (!snap && havePrev) {
-      const k = 1 - Math.exp(-dt / 0.045);
+      const k = 1 - Math.exp(-dt / (0.045 + 0.3 * jumpBlend));   // ~45 ms; longer right after a jump
       for (let i = 0; i < bones.length; i++) {
         _qsm.fromArray(prevQ, i * 4).slerp(bones[i].quaternion, k);
         bones[i].quaternion.copy(_qsm);
