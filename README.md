@@ -40,7 +40,7 @@ There are two timelines in `script.js`:
 | --- | --- | --- |
 | 0 | Intro | the page opens on "I am Nisham Sajjad," alone (typed in word by word); at the first scroll he drops out of the sky, lands in a deep knee bend, rises and smiles; the 8-years line follows |
 | 1.75 | Mission Hospital | turns and walks toward the hospital, turns back and walks onto his mark |
-| 3.7 | COVID | reaches into his pocket, lifts the mask to his face while the other hand comes up, hooks both loops over his ears, lowers his hands |
+| 3.7 | COVID | puts the mask on two-handed, as a person really does: holds it by both loops at his waist, lifts it to his face, hooks both loops over his ears, pinches the nose bridge, pulls it under his chin, lowers his hands |
 | 5.1 | NABH | a clipboard is tossed in on an arc; he reaches, catches it and holds it to his chest; "(NABH)" appears on the sign letter by letter |
 | 7.1 | Maldives | plane flies in; he pilots with one hand and waves with the other |
 | 8.95 | NURF Pharmacy, IGMH | crouches, leaps out of the cockpit (the plane flies on), drops in as IGMH rises and lands on his feet, sits back into his chair (it rocks under him), starts typing |
@@ -63,6 +63,7 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
 - **Face:** natural random blinks (the eyelids roll down), and a smile that curves the mouth and lifts the brows: after landing, on his mark, at the keyboard, and for goodbye. Under the surgical mask the nose, mouth and moustache are hidden so nothing pokes through.
 - **Hands:** the mask and the clipboard use an anatomical two-bone IK solver: the elbow is treated as a hinge, and the upper arm twists so the elbow only ever bends the natural way. Each hand follows one smooth spline path (centripetal Catmull-Rom) through waypoints that move with his body, and the elbow direction blends continuously, so the reach flows like a real one (`handsHospital`).
 - **He reacts to you:** his head (with a little neck and chest) turns to follow the cursor, or your finger on a phone, as if you were just in front of the screen. Drag sideways, with the mouse or a finger, to spin him around; he keeps the momentum, then turns back to his scene. Vertical swipes still scroll. With a mouse, the painted backgrounds drift slightly against the cursor. All of this stands down while his hands are busy, and is off with reduced motion (`lookAtPointer`, `spinStep` in `hero3d.js`).
+- **He's physical:** press on him and pull, and he leans toward your pointer or finger and stretches; let go and he wobbles back like jelly. A quick tap squashes him and he bounces back with a smile. His head lags a little behind sudden moves (landings, turns). The springs run on a fixed 60 Hz step split into 4 substeps, so the motion is identical at any frame rate (`respond`, `physics` in `hero3d.js`). A finger on him holds him instead of scrolling; anywhere else, swipes scroll and sideways drags spin him.
 - **Fallback:** without WebGL, or if the 3D files fail to load within 15 s, the illustrated 2D character plays instead.
 - **Tuning:** placements are in `hero3d.js` (`MARK`, `P0` (where he lands), `SEAT`, `COCKPIT`, `MASK_FIT`). Timings are in the `S3D` block of `script.js`.
 - **Mask:** sized to the cartoon head and, once on, it turns with his head.
@@ -106,7 +107,8 @@ cd tools && python extract_mask.py
 
 - **Mobile (≤768px)** follows the storyboard pages exactly: text on top, scene below, full `100svh` stage.
 - **Tablet portrait**: same as mobile with more padding.
-- **Desktop (≥1200px, or wide landscape)**: text in the left column, scene on the right with a soft blurred fill behind it and a dark gradient for readability. The plane crosses the full width.
+- **Short landscape screens** (≤560px tall): a smaller Connect orbit and tighter spacing so everything fits.
+- **Desktop (≥1200px, or any landscape screen ≥560px wide, including phones turned sideways)**: text in the left column, scene on the right with a soft blurred fill behind it and a dark gradient for readability. The plane crosses the full width.
 
 ## Accessibility & performance
 

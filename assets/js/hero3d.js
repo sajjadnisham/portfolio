@@ -59,7 +59,7 @@ async function boot() {
   rig.add(avatar);
   const bone = (n) => avatar.getObjectByName(n);
   const B = {
-    hips: bone('Hips'), spine2: bone('Spine2'), head: bone('Head'), neck: bone('Neck'),
+    hips: bone('Hips'), spine: bone('Spine'), spine1: bone('Spine1'), spine2: bone('Spine2'), head: bone('Head'), neck: bone('Neck'),
     rArm: bone('RightArm'), rFore: bone('RightForeArm'), rHand: bone('RightHand'),
     lArm: bone('LeftArm'), lFore: bone('LeftForeArm'), lHand: bone('LeftHand'),
     rMid: bone('RightHandMiddle1'), lMid: bone('LeftHandMiddle1'),
@@ -407,6 +407,23 @@ async function boot() {
     _spline.points = pts;
     return _spline.getPoint(THREE.MathUtils.clamp(p / (pts.length - 1), 0, 1));
   };
+  // piecewise-smooth blend of per-knot vectors (rig space) at path position p
+  const _kv = new THREE.Vector3();
+  const knotBlend = (p, keys) => {
+    const i = THREE.MathUtils.clamp(Math.floor(p), 0, keys.length - 2);
+    const f = THREE.MathUtils.smoothstep(p - i, 0, 1);
+    return _kv.set(...keys[i]).lerp(new THREE.Vector3(...keys[i + 1]), f).clone();
+  };
+  // mask hands: elbow direction (relative to the shoulder) and finger direction per knot
+  const poleAt = (p, sx, arm) => {
+    const v = knotBlend(p, [[0.4, -0.6, 0], [0.45, -0.6, -0.1], [0.55, -0.6, 0], [0.85, -0.5, 0.05], [0.85, -0.45, 0.0], [0.6, -0.7, 0.15], [0.55, -0.75, 0.15], [0.4, -0.6, 0]]);
+    return offsetFrom(arm, sx * v.x, v.y, v.z);
+  };
+  const fingerAt = (p, sx) => {
+    const v = knotBlend(p, [[0.8, 0.2, 0.55], [0.8, 0.2, 0.55], [0.5, 0.6, 0.4], [0.15, 1, -0.05], [0, 1, -0.4], [0.35, 1, 0.05], [0.5, 0.9, 0.15], [0.5, 0.8, 0.15]]);
+    v.x *= -sx;                                             // inward = toward his centre line
+    return v.applyQuaternion(rig.quaternion).normalize();
+  };
 
   /* ---------- per-frame: state → pose ---------- */
   const clock = new THREE.Clock();
@@ -523,10 +540,11 @@ async function boot() {
     lastFrame = f;
     if (f === 'H') handsHospital(s);
     lookAtPointer(s, dt, f);
+    respond(s, dt, f);
     smoothPose(dt, snap);
     avatar.updateMatrixWorld(true);
     if (f === 'H') placeMask(s);
-    face.set(blink(tClock), s.smile);
+    face.set(blink(tClock), Math.max(s.smile, smileBoost > 0 ? Math.min(1, smileBoost * 2) : 0));
     face.masked(f === 'H' && mask.visible && s.mc > 0.55);
   }
   let lastFrame = null;
@@ -549,13 +567,33 @@ async function boot() {
     }
   }, { passive: true });
   const film = document.getElementById('film');
+  // Press on him: grab (he leans and stretches toward the pull, wobbles back on
+  // release, bounces on a tap). Press anywhere else: drag sideways to spin him.
+  const grab = { on: false, id: null, x0: 0, y0: 0, x: 0, y: 0, t0: 0 };
   film.addEventListener('pointerdown', (e) => {
     if (RM || e.button > 0 || e.target.closest('a, button')) return;
     ptr.x = e.clientX; ptr.y = e.clientY; ptr.t = now();
+    if (hitsHim(e.clientX, e.clientY)) {
+      Object.assign(grab, { on: true, id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: now() });
+      document.documentElement.classList.add('grabbing');
+      return;
+    }
     Object.assign(spin, { drag: true, id: e.pointerId, lastX: e.clientX, lastT: now(), v: 0 });
     document.documentElement.classList.add('spinning');
   });
+  // a finger on him holds him instead of scrolling the page
+  film.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    if (!RM && t && e.touches.length === 1 && !e.target.closest('a, button') && hitsHim(t.clientX, t.clientY)) e.preventDefault();
+  }, { passive: false });
+  addEventListener('pointermove', (e) => { if (grab.on && e.pointerId === grab.id) { grab.x = e.clientX; grab.y = e.clientY; } }, { passive: true });
   const endDrag = (e) => {
+    if (grab.on && (!e || e.pointerId === grab.id)) {
+      grab.on = false;
+      document.documentElement.classList.remove('grabbing');
+      // a quick tap: he bounces like jelly
+      if (now() - grab.t0 < 0.3 && Math.hypot(grab.x - grab.x0, grab.y - grab.y0) < 8) poke();
+    }
     if (!spin.drag || (e && e.pointerId !== spin.id)) return;
     spin.drag = false; spin.released = now();
     document.documentElement.classList.remove('spinning');
@@ -574,6 +612,108 @@ async function boot() {
       spin.v *= Math.exp(-dt * 4);
     }
     return spin.a;
+  }
+
+  /* ---------- physical response: fixed-step springs ----------
+     Like a soft-body sim, the springs run on a fixed 60 Hz step split into
+     substeps, so the wobble is identical on every device and frame rate. */
+  const SP = {
+    lean: { x: 0, v: 0, k: 95, z: 0.3 },          // sideways lean in the screen plane (rad)
+    bow: { x: 0, v: 0, k: 95, z: 0.34 },          // forward/back bow (rad)
+    sq: { x: 0, v: 0, k: 240, z: 0.2 },           // squash (−) / stretch (+)
+    hx: { x: 0, v: 0, k: 130, z: 0.42 },          // head follow-through, sideways
+    hz: { x: 0, v: 0, k: 130, z: 0.42 },          // head follow-through, nod
+  };
+  const target = { lean: 0, bow: 0, sq: 0, hx: 0, hz: 0 };
+  let physAcc = 0;
+  function physics(dt) {
+    physAcc = Math.min(physAcc + dt, 0.25);
+    while (physAcc >= 1 / 60) {
+      physAcc -= 1 / 60;
+      for (let i = 0; i < 4; i++) {
+        const h = 1 / 240;
+        for (const key in SP) {
+          const p = SP[key], c = 2 * p.z * Math.sqrt(p.k);
+          p.v += (p.k * (target[key] - p.x) - c * p.v) * h;     // semi-implicit Euler
+          p.x += p.v * h;
+        }
+      }
+    }
+  }
+  function poke() {
+    SP.sq.v -= 2.6;                                           // squashes, then springs up
+    SP.lean.v += (Math.random() - 0.5) * 3;
+    smileBoost = 1;
+  }
+  let smileBoost = 0;
+  // is the pointer on him? (a capsule from his head to his feet, in screen px)
+  const _h0 = new THREE.Vector3(), _h1 = new THREE.Vector3(), _h2 = new THREE.Vector3();
+  function hitsHim(cx, cy) {
+    if (!frame || !canvas.isConnected) return false;
+    const cam = frame === 'H' ? camH : frame === 'D' ? camD : camP;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return false;
+    const toPx = (v) => { const q = v.clone().project(cam); return [rect.left + (q.x + 1) / 2 * rect.width, rect.top + (1 - q.y) / 2 * rect.height]; };
+    B.head.getWorldPosition(_h0); _h0.y += 0.12;
+    B.hips.getWorldPosition(_h1);
+    _h2.copy(_h1); _h2.y = rig.position.y + 0.05;
+    const a = toPx(_h0), b = toPx(_h2), m = toPx(_h1);
+    const side = toPx(_h1.clone().add(new THREE.Vector3(0.24, 0, 0)));
+    const r = Math.hypot(side[0] - m[0], side[1] - m[1]);
+    const abx = b[0] - a[0], aby = b[1] - a[1];
+    const t = THREE.MathUtils.clamp(((cx - a[0]) * abx + (cy - a[1]) * aby) / (abx * abx + aby * aby || 1), 0, 1);
+    return Math.hypot(cx - (a[0] + abx * t), cy - (a[1] + aby * t)) < r + Math.hypot(abx, aby) * 0.06 * (1 - t);
+  }
+  // feed the springs and bend him with them (after the clips and IK)
+  const _hv = new THREE.Vector3(), _hp0 = new THREE.Vector3(), _hvel = new THREE.Vector3(), _camDir = new THREE.Vector3();
+  let haveHip = false;
+  function respond(s, dt, f) {
+    if (RM) return;
+    const cam = f === 'H' ? camH : f === 'D' ? camD : camP;
+    // grab: the pull, in screen px, leans and stretches him toward the pointer
+    if (grab.on) {
+      const dx = grab.x - grab.x0, dy = grab.y - grab.y0;
+      target.lean = THREE.MathUtils.clamp(dx / 160, -1, 1) * 0.34;
+      target.sq = THREE.MathUtils.clamp(-dy / 260, -1, 1) * 0.12;
+      target.bow = THREE.MathUtils.clamp(dy / 200, 0, 1) * 0.25;
+    } else { target.lean = 0; target.sq = 0; target.bow = 0; }
+    // follow-through: his head lags behind sudden body moves
+    B.hips.getWorldPosition(_hv);
+    if (haveHip && dt > 0) {
+      const vel = _hv.clone().sub(_hp0).divideScalar(dt);
+      const acc = vel.clone().sub(_hvel).divideScalar(Math.max(dt, 1 / 120));
+      _hvel.lerp(vel, 0.5);
+      const inv = rig.getWorldQuaternion(new THREE.Quaternion()).invert();
+      acc.applyQuaternion(inv);
+      target.hx = THREE.MathUtils.clamp(-acc.x * 0.006, -0.12, 0.12);
+      target.hz = THREE.MathUtils.clamp(acc.z * 0.006 - acc.y * 0.004, -0.12, 0.12);
+    }
+    _hp0.copy(_hv); haveHip = true;
+    smileBoost = Math.max(0, smileBoost - dt * 0.8);
+    physics(dt);
+
+    const busy = Math.max(s.wR, s.wL, s.wC);                    // his hands are on the mask / clipboard
+    const k = 1 - 0.75 * busy;
+    cam.getWorldDirection(_camDir);
+    const _q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0).applyQuaternion(rig.getWorldQuaternion(new THREE.Quaternion()));
+    const right = _camDir.clone().cross(up).normalize();
+    if (Math.abs(SP.lean.x) + Math.abs(SP.bow.x) > 1e-4) {
+      for (const [b, share] of [[B.spine, 0.3], [B.spine1, 0.35], [B.spine2, 0.35]]) {
+        _q.setFromAxisAngle(_camDir, -SP.lean.x * share * k);           // in the screen plane, toward the pull
+        rotateBoneWorld(b, _q);
+        _q.setFromAxisAngle(right, -SP.bow.x * share * k);
+        rotateBoneWorld(b, _q);
+      }
+    }
+    for (const [b, share] of [[B.neck, 0.45], [B.head, 0.55]]) {
+      const side = new THREE.Vector3(1, 0, 0).applyQuaternion(rig.getWorldQuaternion(new THREE.Quaternion()));
+      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(rig.getWorldQuaternion(new THREE.Quaternion()));
+      _q.setFromAxisAngle(fwd, SP.hx.x * share); rotateBoneWorld(b, _q);
+      _q.setFromAxisAngle(side, SP.hz.x * share); rotateBoneWorld(b, _q);
+    }
+    // squash & stretch keeps his volume (a little jelly)
+    const q = THREE.MathUtils.clamp(SP.sq.x, -0.16, 0.16);
+    avatar.scale.set(1 - q * 0.5, 1 + q, 1 - q * 0.5);
   }
 
   // Head (with a little neck and chest) turns to follow the pointer, as if it
@@ -648,11 +788,11 @@ async function boot() {
 
   // the mask travels in his (smoothed) fingers, then settles on his face
   function placeMask(s) {
-    if (!(s.ms > 0 || s.wR > 0)) return;
-    const wrist = B.rHand.getWorldPosition(new THREE.Vector3());
-    const knuckle = B.rMid.getWorldPosition(new THREE.Vector3());
-    // held a little past the knuckles, just in front of the palm
-    const inHand = wrist.lerp(knuckle, 1.25).add(new THREE.Vector3(0, 0, 0.03).applyQuaternion(rig.quaternion));
+    if (!(s.ms > 0)) return;
+    // held by its loops between both hands, a little in front of the fingers
+    const gR = B.rHand.getWorldPosition(new THREE.Vector3()).lerp(B.rMid.getWorldPosition(new THREE.Vector3()), 1.3);
+    const gL = B.lHand.getWorldPosition(new THREE.Vector3()).lerp(B.lMid.getWorldPosition(new THREE.Vector3()), 1.3);
+    const inHand = gR.add(gL).multiplyScalar(0.5).add(new THREE.Vector3(0, -0.02, 0.04).applyQuaternion(rig.quaternion));
     // the arc's centre sits inside the head, so its surface lands on the face
     const onFace = B.head.localToWorld(MASK_LOCAL.clone());
     mask.position.copy(lerpV(inHand, onFace, s.mc));
@@ -668,46 +808,34 @@ async function boot() {
     const relaxR = offsetFrom(B.rArm, -0.4, -0.6, 0.0);          // elbow down and a little out
     const relaxL = offsetFrom(B.lArm, 0.4, -0.6, 0.0);
 
-    // mask: one continuous reach for each hand, like a person putting a mask on
-    //   right: rest → pocket (grabs it) → up past the chest → mask to the chin
-    //          → along the cheek → hooks the loop over the ear → down in front → rest
-    //   left:  rest → up in front of the body → cheek → other ear → down in front → rest
-    // (the low waypoints sit in front of the body, so the hands never pass
-    //  through a hands-on-hips pose)
+    // mask, two-handed (as a person really does it): he holds it by both ear
+    // loops in front of his waist → lifts it to his face → hooks both loops
+    // over his ears → pinches the nose bridge → pulls the lower edge under his
+    // chin → lowers his hands. Both hands follow mirrored spline paths
+    // (s.mp: 0 rest · 1 waist · 2 chest · 3 face · 4 ears · 5 nose · 6 chin · 7 rest).
     if (s.ms > 0 || s.wR > 0 || s.wL > 0) {
-      const restR = B.rHand.getWorldPosition(new THREE.Vector3());   // where the idle has the hands
-      const restL = B.lHand.getWorldPosition(new THREE.Vector3());
-      const pocket = offsetFrom(B.hips, -0.19, -0.08, 0.1);
-      const liftR = offsetFrom(B.spine2, -0.13, -0.02, 0.32);
-      const chin = offsetFrom(B.head, -0.045, -0.05, 0.24);   // (around the cartoon head)
-      const cheekR = offsetFrom(B.head, -0.19, -0.06, 0.13);
-      const earR = offsetFrom(B.head, -0.18, -0.03, 0.0);
-      const jawR = offsetFrom(B.head, -0.15, -0.24, 0.17);          // in front of the shoulder on the way down
-      const dropR = offsetFrom(B.spine2, -0.15, -0.3, 0.27);
-      const bellyL = offsetFrom(B.spine2, 0.14, -0.3, 0.27);
-      const liftL = offsetFrom(B.spine2, 0.16, 0.0, 0.3);
-      const cheekL = offsetFrom(B.head, 0.2, -0.08, 0.15);
-      const earL = offsetFrom(B.head, 0.18, -0.03, 0.0);
-      const jawL = offsetFrom(B.head, 0.15, -0.24, 0.17);
-      const dropL = offsetFrom(B.spine2, 0.15, -0.3, 0.27);
-      // knots: rest 0 · pocket 1 · lift 1.5 · chin 2 · cheek 3 · ear 4 · jaw 5 · drop 6 · rest 7
-      const mp = s.mp < 1 ? s.mp : s.mp < 2 ? 1 + (s.mp - 1) * 2 : s.mp + 1;
-      const rTarget = along(mp, [restR, pocket, liftR, chin, cheekR, earR, jawR, dropR, restR]);
-      //        lp: rest 0 · belly 1 · chest 2 · cheek 3 · ear 4 · jaw 5 · drop 6 · rest 7
-      const lTarget = along(s.lp, [restL, bellyL, liftL, cheekL, earL, jawL, dropL, restL]);
-      // elbows: down at the pocket, lifting out to the side as the hands rise,
-      // and settling down again as soon as the hands leave the ears
-      const k = THREE.MathUtils.smoothstep(s.mp, 0.9, 2.2) * (1 - THREE.MathUtils.smoothstep(s.mp, 4.05, 4.9));
-      const poleRt = lerpV(s.mp < 3 ? poleR : relaxR, offsetFrom(B.rArm, -0.85, -0.5, 0.05), k);   // elbows out to the side, below the shoulder
-      const kl = THREE.MathUtils.smoothstep(s.lp, 1.2, 2.6) * (1 - THREE.MathUtils.smoothstep(s.lp, 4.05, 4.9));
-      const poleLt = lerpV(relaxL, offsetFrom(B.lArm, 0.85, -0.5, 0.05), kl);
-      ik(B.rArm, B.rFore, B.rHand, rTarget, poleRt, s.wR);
-      ik(B.lArm, B.lFore, B.lHand, lTarget, poleLt, s.wL);
-      // fingers point up and a little back near the face, like hooking a loop behind the ear
-      const up = new THREE.Vector3(0, 1, -0.35).applyQuaternion(rig.quaternion).normalize();
-      const headC = offsetFrom(B.head, 0, 0.12, 0.035);              // palms turn toward his head
-      aimHand(B.rHand, B.rMid, up, s.wR * THREE.MathUtils.smoothstep(s.mp, 1.4, 2.4) * (1 - THREE.MathUtils.smoothstep(s.mp, 4.1, 4.9)), headC);
-      aimHand(B.lHand, B.lMid, up, s.wL * THREE.MathUtils.smoothstep(s.lp, 2.0, 3.2) * (1 - THREE.MathUtils.smoothstep(s.lp, 4.1, 4.9)), headC);
+      const headC = offsetFrom(B.head, 0, 0.12, 0.035);
+      const gripR = B.rHand.getWorldPosition(new THREE.Vector3()), gripL = B.lHand.getWorldPosition(new THREE.Vector3());
+      const mid = gripR.clone().add(gripL).multiplyScalar(0.5);
+      for (const [sx, arm, fore, hand, finger, w] of [[-1, B.rArm, B.rFore, B.rHand, B.rMid, s.wR], [1, B.lArm, B.lFore, B.lHand, B.lMid, s.wL]]) {
+        if (w <= 0.001) continue;
+        const rest = hand.getWorldPosition(new THREE.Vector3());            // where the idle has the hand
+        const pts = [
+          rest,
+          offsetFrom(B.hips, sx * 0.15, 0.17, 0.3),          // holding the loops at his waist
+          offsetFrom(B.spine2, sx * 0.16, 0.05, 0.33),       // lifting it
+          offsetFrom(B.head, sx * 0.16, -0.05, 0.14),        // mask over mouth and nose, hands at the cheeks
+          offsetFrom(B.head, sx * 0.17, -0.01, -0.01),       // loops over the ears
+          offsetFrom(B.head, sx * 0.065, -0.07, 0.19),       // pinching the nose bridge
+          offsetFrom(B.head, sx * 0.08, -0.175, 0.18),       // pulling it under the chin
+          rest,
+        ];
+        ik(arm, fore, hand, along(s.mp, pts), poleAt(s.mp, sx, arm), w);
+        // fingers: inward on the loops, up beside the face, back over the ears, up-and-in at nose and chin
+        const dir = fingerAt(s.mp, sx);
+        const facing = lerpV(mid, headC, THREE.MathUtils.smoothstep(s.mp, 2, 3));   // palms toward each other, then the face
+        aimHand(hand, finger, dir, w * THREE.MathUtils.smoothstep(s.mp, 0.3, 1.0) * (1 - THREE.MathUtils.smoothstep(s.mp, 6.2, 6.85)), facing);
+      }
     }
 
     // clipboard: tossed in from the right, caught, held against his chest
