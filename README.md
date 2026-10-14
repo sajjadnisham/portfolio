@@ -70,9 +70,11 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
   - When a fast scroll jumps his acting ahead, his pose and position blend into the new moment over ~0.35 s instead of snapping.
   - Blends between moves are eased.
   - The walk loop starts at the phase whose legs match the end of the turn (`WA_PHASE` in `script.js`).
-  - A pose filter eases every bone toward its target (about 45 ms), which removes pops at blends, loop seams and IK changes (`smoothPose`).
+  - A two-stage pose filter (critically damped, ~30 ms per stage) eases every bone toward its target, so both the pose and its speed change smoothly; this removes pops at blends, loop seams and IK changes (`smoothPose`).
+  - Each scene's acting eases in from standstill, and rewinds ease in and out.
+  - The head's follow-through uses filtered body acceleration, so it never jitters.
   - Shaders are compiled at load, so switching scenes doesn't hitch.
-  - Rendering is capped at 1.5×, and drops to 1× on devices that can't hold about 45 fps.
+  - Rendering is capped at 1.5×, and drops once to 1× on devices that can't hold about 45 fps (it never flips back and forth).
   - Phones skip the costly blur-to-sharp text effect.
 - **Changing the look:** edit `assets/js/cartoon.js` (the `COL` colours, the coat profile, the head size `HEAD_K`). To use a rigged 3D model from another tool instead, it needs a Mixamo-style humanoid skeleton.
 - **Final round photo:** `tools/make_avatar.py` crops `tools/source/photo.webp` (cyan backdrop kept) into `assets/img/avatar.webp`.

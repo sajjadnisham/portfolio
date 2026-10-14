@@ -434,7 +434,8 @@
     const order = ['start', ...CUES.map((c) => c[1])];
     const iTo = order.indexOf(want), iFrom = order.indexOf(prevCue);
     prevCue = want;
-    if (playing) playing.kill();
+    const wasMoving = !!(playing && playing.isActive());
+    if (playing) { gsap.killTweensOf(playing); playing.kill(); }
     // Skipping ahead past whole scenes: jump to the start of the target moment
     // and play just that one, so a fast scroll never shows an earlier scene's
     // props (the plane, the clipboard…) lingering over a later page.
@@ -442,15 +443,22 @@
     if (iTo - iFrom > 1 && act.time() < base) act.seek(base);
     const now = act.time();
     if (to < now) {
-      // scrolling back up: a quick rewind
-      playing = act.tweenTo(to, { duration: Math.min((now - to) / 2.5, 1.2), ease: 'none' });
-    } else if (now < base - 0.05) {
+      // scrolling back up: a quick rewind that eases in and out
+      playing = act.tweenTo(to, { duration: Math.min((now - to) / 2.5, 1.2), ease: 'sine.inOut' });
+      return;
+    }
+    if (now < base - 0.05) {
       // still finishing the previous moment: fast-forward the rest, then play this one
       playing = gsap.timeline()
         .add(act.tweenTo(base, { duration: Math.min((base - now) / 3, 1), ease: 'none' }))
         .add(act.tweenTo(to, { duration: to - base, ease: 'none' }));
     } else {
       playing = act.tweenTo(to, { duration: to - now, ease: 'none' });   // natural speed
+    }
+    // start moving gently (from standstill), or keep the pace if he was already moving
+    if (!wasMoving) {
+      playing.timeScale(0.15);
+      gsap.to(playing, { timeScale: 1, duration: 0.35, ease: 'sine.in' });
     }
   }
 
