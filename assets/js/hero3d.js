@@ -438,6 +438,16 @@ async function boot() {
   };
   const FRONT = -(root.standToSit ? root.standToSit[root.standToSit.length - 1][2] - root.standToSit[0][2] : -0.44);   // ~0.44 m
   const hipsAt = (k, i) => moves.clips[k].tracks.find((t) => t.n === 'Hips.position').v[i * 3 + 1];
+  // The mixer only re-writes a bone when its animated value changed since the
+  // last update. But IK, look-at and the smoothing filter edit the bones after
+  // the mixer, so an unchanged track (the idle's steady hips, a held arm) would
+  // keep last frame's edited value and feed it back in: visible jitter. Forget
+  // the mixer's "last applied" values so every bone is re-posed every frame.
+  function freshPose() {
+    for (const b of mixer._bindings || []) {
+      if (b && b.buffer && b.valueSize) b.buffer.fill(NaN, b.valueSize, b.valueSize * 3);
+    }
+  }
   const setAct = (name, time, weight) => { const a = A[name]; a.time = time; a.weight = weight; };
 
   function pose(dt = 0) {
@@ -527,6 +537,7 @@ async function boot() {
       rig.quaternion.copy(prevRigQ.clone().slerp(rig.quaternion, k));
     }
     prevRigP.copy(rig.position); prevRigQ.copy(rig.quaternion);
+    freshPose();
     mixer.update(0);
     avatar.updateMatrixWorld(true);
     rig.updateMatrixWorld(true);
@@ -921,7 +932,9 @@ async function boot() {
   renderer.setAnimationLoop(loop);          // paced by the display, same tick as GSAP
 
   document.documentElement.classList.add('has-3d');
-  window.__hero3d = { WALK_K, face, renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B };
+  window.__hero3d = { WALK_K, face, renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B, rig,
+    // for tooling (motion analysis): advance the pose by dt without the render loop
+    step: (dt) => { tClock += dt; pose(dt); }, stop: () => renderer.setAnimationLoop(null) };
 }
 
 /* ---------- helpers ---------- */
