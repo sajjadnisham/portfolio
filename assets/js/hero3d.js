@@ -48,10 +48,12 @@ async function boot() {
   canvas.setAttribute('aria-hidden', 'true');
 
   /* ---------- assets ---------- */
+  // 'minifig' = glossy toy-brick miniature (minifig.js); 'cartoon' = soft cartoon (cartoon.js)
+  const STYLE = 'minifig';
   const [gltf, moves, { buildCartoon, blinker }] = await Promise.all([
     new GLTFLoader().loadAsync(`assets/3d/nisham.glb?v=${V}`),              // the animated skeleton
     fetch(`assets/3d/moves.json?v=${V}`).then((r) => { if (!r.ok) throw new Error('moves ' + r.status); return r.json(); }),
-    import(`./cartoon.js?v=${V}`),                                           // his cartoon look, modelled in code
+    import(`./${STYLE}.js?v=${V}`),                                          // his look, modelled in code
   ]);
 
   const avatar = gltf.scene;
@@ -173,8 +175,8 @@ async function boot() {
   // the mask sits over the cartoon face's nose-to-chin, sized to his big head,
   // and once on it turns with his head (offset/rotation in Head-bone space,
   // measured in the rest pose)
-  const MASK_SCALE = 1.29 * toon.head.scale;
-  const MASK_LOCAL = (() => { const c = B.head.localToWorld(toon.head.centre.clone()); c.y -= 0.058 * toon.head.scale; return B.head.worldToLocal(c); })();
+  const MASK_SCALE = toon.head.maskScale ?? 1.29 * toon.head.scale;
+  const MASK_LOCAL = (() => { const c = B.head.localToWorld(toon.head.centre.clone()); c.y -= toon.head.maskDrop ?? 0.058 * toon.head.scale; return B.head.worldToLocal(c); })();
   const HEAD_QC = toon.headRestQ.clone().invert();
   const board = new THREE.Group();
   {

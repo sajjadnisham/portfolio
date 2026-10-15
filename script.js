@@ -564,7 +564,7 @@
     start: 'top top',
     end: () => '+=' + Math.round(tl.duration() * G.vh * BEAT),
     pin: true,
-    scrub: RM ? true : 1.4,
+    scrub: RM ? true : 1.6,
     anticipatePin: 1,
     invalidateOnRefresh: true,
     // cue the acting from where the scroll is heading, not the lagging scrub
@@ -591,7 +591,7 @@
 
   let lenis = null;
   if (!RM && window.Lenis) {
-    lenis = new Lenis({ lerp: 0.07, smoothWheel: true });
+    lenis = new Lenis({ lerp: 0.06, smoothWheel: true, touchMultiplier: 1.1 });
     lenis.on('scroll', ScrollTrigger.update);
     gsap.ticker.add((t) => lenis.raf(t * 1000));
     gsap.ticker.lagSmoothing(0);
