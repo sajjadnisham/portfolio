@@ -54,7 +54,7 @@ There are two timelines in `script.js`:
 | 3.7 | COVID | puts the mask on two-handed, as a person really does: holds it by both loops at his waist, lifts it to his face, hooks both loops over his ears, pinches the nose bridge, pulls it under his chin, lowers his hands |
 | 5.1 | NABH | a clipboard is tossed in on an arc; he catches it, holds it to his chest and sits down inside with it; "(NABH)" appears above the sign letter by letter |
 | 7.1 | Maldives | plane flies in; he pilots with one hand and waves with the other |
-| 8.95 | NURF Pharmacy | crouches and leaps out of the cockpit (the plane flies on), crashes through the ceiling of the Oncology Department (a jagged hole, falling debris, dust), lands on his feet, walks through the doorway into the NURF Pharmacy and sits down behind the counter at his laptop |
+| 8.95 | NURF Pharmacy | crouches and leaps out of the cockpit (the plane flies on), crashes through the ceiling inside the Oncology Department, seen through its open glass door (a jagged hole, falling debris, dust), lands on his feet in the department, walks out through its door and into the NURF Pharmacy and sits down behind the counter at his laptop |
 | 11.6 | Responsibilities | he works at his laptop (typing in natural bursts) and swivels with the chair, right through to the end; the seven duties appear one by one and stay until the Connect page |
 | 15.2 | Connect | everything lifts away, the social-link orbit draws in |
 
@@ -117,7 +117,7 @@ The NURF Pharmacy scene is a photo of an Oncology Department corridor with the p
 - `oncology.webp`: the photo with the customer and the front pharmacist removed (LaMa inpainting), the boards re-lettered in perspective ("ONCOLOGY Department", "NURF PHARMACY"), the ceiling and floor extended, and the top fading to dark for the story text.
 - `oncology-front.webp`: the same scene with the doorway and the pharmacy window cut out (monitors, sign and sanitiser kept). `hero3d.js` shows it once he's walked past the doorway, so the wall and the counter pass in front of him.
 - **Crash:** when he drops from the plane, a jagged hole tears open in the ceiling, 18 chunks of debris fall with gravity (one bounce, then slide) and dust puffs spread and fade. It is a pure function of time since the `crash` label, so it scrubs both ways (`crashFx` in `hero3d.js`).
-- **Walk:** a centripetal Catmull-Rom path from where he lands, through the doorway, to the counter (`curveD`); the walk cycle is locked to the distance covered so his feet don't slide.
+- **Walk:** a centripetal Catmull-Rom path from where he lands inside the department (12 m back), out through its doorway, behind the pillar, to the counter (`curveD`). His pace eases in and out with no jolt (the acceleration itself ramps, `paceD`), and the walk cycle is locked to the distance covered so his feet don't slide.
 
 ## Artwork
 

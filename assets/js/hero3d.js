@@ -247,14 +247,26 @@ async function boot() {
   const lerpA = (a, b, t) => a + wrapA(b - a) * t;
   // IGMH desk: horizon at his eye line (row 760), 560 px per metre at the chair.
   // Office (tools/make_oncology.py): horizon row 671, f 1061 px, eye 1.6 m;
-  // the pharmacy counter front is 5.6 m away, the department wall 6.6 m.
+  // the pharmacy counter front is 5.6 m away, the department wall ~7.2 m;
+  // through its open glass door the department's own room runs back ~13 m.
   const camD = paintedCamera(941, 1672, 1061, 671, 1.6);
   const toXD = (u, d) => (u - 470.5) * d / 1061;
-  const CEIL = 3.4;                                                    // ceiling height (m)
-  const LANDD = V3(toXD(208, 4.2), 0, -4.2);                          // in front of the department doorway
+  const CEIL = 2.7;                                                    // the department room's ceiling (m)
+  const LANDD = V3(toXD(232, 12), 0, -12);                            // inside the Oncology Department, seen through its open door
   const STANDD = V3(toXD(486, 6.0), 0, -6.0);                         // at the counter, between the monitors
-  const curveD = new THREE.CatmullRomCurve3([LANDD, V3(-1.62, 0, -6.6), V3(-1.4, 0, -7.05), V3(-0.4, 0, -7.05), STANDD], false, 'centripetal');
+  // out through the doorway, behind the pillar, into the pharmacy
+  const curveD = new THREE.CatmullRomCurve3([LANDD, V3(-2.25, 0, -9.6), V3(-1.8, 0, -7.6), V3(-1.55, 0, -6.8),
+    V3(-1.0, 0, -6.8), V3(-0.4, 0, -6.95), STANDD], false, 'centripetal');
   const lenD = curveD.getLength();
+  // walking pace along it: a smooth start, an even stride, a smooth stop (the
+  // acceleration itself ramps, so there's no jolt). Maps time (0–1) → distance (0–1).
+  const paceD = (() => {
+    const N = 256, ramp = 0.16, v = [], f = [0];
+    for (let i = 0; i <= N; i++) { const t = i / N; v.push(THREE.MathUtils.smootherstep(t, 0, ramp) * THREE.MathUtils.smootherstep(1 - t, 0, ramp)); }
+    for (let i = 1; i <= N; i++) f.push(f[i - 1] + (v[i] + v[i - 1]) / 2);
+    const tot = f[N];
+    return (t) => { const x = THREE.MathUtils.clamp(t, 0, 1) * N, i = Math.min(N - 1, Math.floor(x)); return (f[i] + (f[i + 1] - f[i]) * (x - i)) / tot; };
+  })();
   const SEAT = STANDD.clone(); SEAT.z += rootAt('standToSit', 2.23)[1];   // (where he ends up sitting)
   // Aeroplane: orthographic, flight frame is 675×565 units, 300 units per metre.
   const PXM = 280;
@@ -287,8 +299,8 @@ async function boot() {
       }
       return new THREE.ShapeGeometry(sh);
     }
-    const rim = new THREE.Mesh(jag(0.78, 26, 1.3), new THREE.MeshBasicMaterial({ color: 0xcfcac2, side: THREE.DoubleSide }));
-    const hole = new THREE.Mesh(jag(0.62, 26, 0.4), new THREE.MeshBasicMaterial({ color: 0x16130f, side: THREE.DoubleSide }));
+    const rim = new THREE.Mesh(jag(0.66, 26, 1.3), new THREE.MeshBasicMaterial({ color: 0xcfcac2, side: THREE.DoubleSide }));
+    const hole = new THREE.Mesh(jag(0.52, 26, 0.4), new THREE.MeshBasicMaterial({ color: 0x16130f, side: THREE.DoubleSide }));
     for (const m of [rim, hole]) { m.rotation.x = Math.PI / 2; m.position.copy(HOLE_C); }
     hole.position.y -= 0.002;
     crash.add(rim, hole);
@@ -623,11 +635,11 @@ async function boot() {
       rig.scale.setScalar(1);
       clip.constant = -RIM_Y;                         // nothing below the cockpit rim: legs appear as they clear it
     } else {
-      /* Office: crashes through the Oncology department's ceiling, lands,
-         walks in through the doorway, behind the pillar, into the pharmacy,
+      /* Office: crashes through the ceiling inside the Oncology Department,
+         lands, walks out through its doorway, behind the pillar, into the pharmacy,
          and sits down at the counter to work. */
       const typeT = typeClock(dt);
-      const u = THREE.MathUtils.clamp(s.dW, 0, 1);
+      const u = paceD(s.dW);
       const Pd = curveD.getPointAt(u), Td = curveD.getTangentAt(u);
       setAct('land', s.tLand, s.wLand);
       setAct('walk', (u * lenD / walkStride * walkDur) % walkDur, s.wWalkD);   // feet locked to the floor
@@ -644,7 +656,7 @@ async function boot() {
       crashFx(actT - (act.labels.crash ?? 1e9));
       const behind = rig.position.z < -5.75;
       if (el.dfront && behind !== dFrontOn) { dFrontOn = behind; el.dfront.style.opacity = behind ? '1' : '0'; }
-      shadow.visible = !behind;
+      shadow.visible = !behind || rig.position.x < -1.3;          // hidden only behind the pharmacy counter
       shadow.position.set(rig.position.x, 0.003, rig.position.z);
       const air = Math.max(0, s.gyD) + Math.max(0, (hipsAt('land', 0) - 1) * s.wLand * (1 - THREE.MathUtils.smoothstep(s.tLand, 0, 0.33)));
       shadow.scale.setScalar(1 + air * 0.4);
