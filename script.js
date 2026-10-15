@@ -68,7 +68,7 @@
       w = h * RATIO;
       if (w < vw) { w = vw; h = w / RATIO; }
       G.A = { x: Math.min(0, (vw - w) / 2), y: vh - h };   // centred on the pharmacy (door to window)
-      G.B = { x: (vw - w) / 2, y: vh - h };
+      G.B = { x: Math.min(0, Math.max(vw - w, -w * 0.02)), y: vh - h };   // office: show the Oncology board too
       G.B2 = { x: G.B.x, y: G.B.y - vh * 0.15 };
     }
     Object.assign(G, { vw, vh, w, h, desk });
@@ -333,7 +333,8 @@
   act.to(rock, { v: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)', onUpdate: rockChair }, `${J}+=${L + 0.07}`);
   act.to(sitterRig, { rotation: -1.4 * M, duration: 0.3, ease: 'sine.out' }, `${J}+=${L + 0.4}`);        // leans back
   act.to(sitterRig, { rotation: 0, duration: 0.5, ease: 'sine.inOut' }, `${J}+=${L + 0.7}`);
-  act.addLabel('desk', `${J}+=4.9`);   // the 3D landing, sitting down and settling at the keyboard take ~4.9 s
+  act.addLabel('crash', `${J}+=1.38`);   // his feet go through the ceiling
+  act.addLabel('desk', `${J}+=10.6`);   // crash in, walk into the pharmacy, sit and start working
 
   /* ---------------------------------------------------------
      3D acting (assets/js/hero3d.js renders it). These tweens only move
@@ -349,7 +350,8 @@
     mp: 0, wR: 0, wL: 0, ms: 0, mc: 0,                                               // mask
     cp: 0, cw: 0, wC: 0,                                                               // clipboard
     tJ: 0.55, wJ: 0, gyP: 0,                                                           // jump from the plane
-    tLand: 0, wLand: 1, gyD: 1.4, tSTS: 0, wSTS: 0, wType: 0, bump: 0,                 // land, sit, type
+    tLand: 0, wLand: 1, gyD: 4.0, tSTS: 0, wSTS: 0, wType: 0, bump: 0,                 // crash in, land, sit, type
+    dW: 0, wWalkD: 0, turnD: 0, faceD: 0,                                              // walk into the pharmacy
     smile: 0,                                                                          // face
   };
   const x3 = (vars, at) => act.to(S3D, { ease: 'none', ...vars }, at);
@@ -404,22 +406,30 @@
   x3({ tJ: 1.363, duration: 0.55 }, 'files+=0.2');
   x3({ gyP: 4.2, duration: 0.45, ease: 'power2.in' }, 'files+=0.3');
   // drops in from above (the Landing clip's own fall), lands on his feet in front of the chair…
-  x3({ gyD: 0, duration: 0.3, ease: 'power2.in' }, 'files+=0.95');
-  x3({ tLand: 0.2, duration: 0.25, ease: 'sine.in' }, 'files+=0.9');      // the landing clip eases into motion…
-  x3({ tLand: 1.4, duration: 1.2 }, 'files+=1.15');                       // …then plays at its own pace
-  // …sits back into it (the chair takes his weight), then settles at the keyboard
-  x3({ wLand: 0, wSTS: 1, duration: 0.3, ease: 'sine.inOut' }, 'files+=2.2');
-  x3({ tSTS: 2.23, duration: 2.23 }, 'files+=2.2');
-  x3({ bump: 1, duration: 0.08, ease: 'power1.out' }, 'files+=3.62');
-  x3({ bump: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)' }, 'files+=3.7');
-  x3({ wSTS: 0, wType: 1, duration: 0.5, ease: 'sine.inOut' }, 'files+=4.2');
+  // falls from the plane through the Oncology department's ceiling (the
+  // 'crash' label: hole, falling debris, dust; see hero3d.js), lands on his feet
+  x3({ gyD: 0, duration: 0.85, ease: 'power2.in' }, 'files+=0.85');       // gravity all the way down
+  x3({ tLand: 0.33, duration: 0.85, ease: 'power1.in' }, 'files+=0.85');  // the clip's own drop, matched
+  x3({ tLand: 2.1, duration: 1.8 }, 'files+=1.7');                         // impact, knees bend, rises
+  // …walks in through the department doorway, behind the pillar, into the
+  // pharmacy, comes to the counter and sits down at it to work
+  x3({ turnD: 1, duration: 0.55, ease: 'sine.inOut' }, 'files+=3.2');
+  x3({ wLand: 0, wWalkD: 1, duration: 0.45, ease: 'sine.inOut' }, 'files+=3.25');
+  x3({ dW: 1, duration: 4.4, ease: 'power1.inOut' }, 'files+=3.35');
+  x3({ wWalkD: 0, duration: 0.45, ease: 'sine.inOut' }, 'files+=7.4');
+  x3({ faceD: 1, duration: 0.6, ease: 'sine.inOut' }, 'files+=7.5');
+  x3({ wSTS: 1, duration: 0.35, ease: 'sine.inOut' }, 'files+=7.95');
+  x3({ tSTS: 2.23, duration: 2.23 }, 'files+=7.95');
+  x3({ bump: 1, duration: 0.08, ease: 'power1.out' }, 'files+=9.37');
+  x3({ bump: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)' }, 'files+=9.45');
+  x3({ wSTS: 0, wType: 1, duration: 0.5, ease: 'sine.inOut' }, 'files+=9.95');
 
   /* Face (face.js): a gentle smile when he faces us, neutral while he walks and works */
   const face = (vars, at, duration = 0.5) => x3({ ...vars, duration, ease: 'sine.inOut' }, at);
   face({ smile: 0 }, 0.3, 0.6);                                        // sets off toward the pharmacy
   face({ smile: 0.45 }, 7.8);                                          // turns to us at the counter
   face({ smile: 0 }, 'hosp', 0.3);
-  face({ smile: 0.35 }, 'files+=4.2', 0.6);                            // at the keyboard
+  face({ smile: 0.35 }, 'files+=9.95', 0.6);                            // at the keyboard
 
   /* --- S1 · the opening: he falls out of the sky and lands in front of us --- */
   // Everything above moves later by INTRO; the fall plays when scrolling starts (CUES).
@@ -594,7 +604,7 @@
     S3D, tl, act, G,
     busy: () => !!(playing && playing.isActive()),   // is the acting playing a scripted moment?
     version: document.documentElement.dataset.v || '',
-    el: { front: $('.pharm-front'), door: pharmDoor, hostH: $('.host-h'), hostP: $('.host-p'), hostD: $('.host-d'), portraitWrap, chair },
+    el: { dfront: $('.onc-front'), front: $('.pharm-front'), door: pharmDoor, hostH: $('.host-h'), hostP: $('.host-p'), hostD: $('.host-d'), portraitWrap, chair },
   };
 
   // re-measure the acting's position-based moves after a resize
