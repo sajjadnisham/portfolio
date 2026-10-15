@@ -48,8 +48,8 @@ async function boot() {
   canvas.setAttribute('aria-hidden', 'true');
 
   /* ---------- assets ---------- */
-  // 'minifig' = glossy toy-brick miniature (minifig.js); 'cartoon' = soft cartoon (cartoon.js)
-  const STYLE = 'minifig';
+  // 'labtoon' = 90s TV-cartoon scientist (labtoon.js); 'minifig' = toy-brick (minifig.js); 'cartoon' = soft cartoon (cartoon.js)
+  const STYLE = 'labtoon';
   const [gltf, moves, { buildCartoon, blinker }] = await Promise.all([
     new GLTFLoader().loadAsync(`assets/3d/nisham.glb?v=${V}`),              // the animated skeleton
     fetch(`assets/3d/moves.json?v=${V}`).then((r) => { if (!r.ok) throw new Error('moves ' + r.status); return r.json(); }),
