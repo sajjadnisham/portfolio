@@ -568,14 +568,14 @@ async function boot() {
   // the finger counts while it's down and for a moment after.
   const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const ptr = { x: 0, y: 0, t: -1e9 };
-  const spin = { a: 0, v: 0, drag: false, lastX: 0, lastT: 0, released: -1e9 };
+  const spin = { a: 0, target: 0, v: 0, drag: false, lastX: 0, lastT: 0, released: -1e9 };
   const now = () => performance.now() / 1000;
   addEventListener('pointermove', (e) => {
     ptr.x = e.clientX; ptr.y = e.clientY; ptr.t = now();
     if (spin.drag && e.pointerId === spin.id) {
       const t = now(), dx = e.clientX - spin.lastX;
       const da = dx * 0.012;                                   // ~half a turn across a phone screen
-      spin.a += da;
+      spin.target += da;                                       // the figure glides after the finger (spinStep)
       spin.v = THREE.MathUtils.lerp(spin.v, da / Math.max(t - spin.lastT, 1 / 120), 0.5);
       spin.lastX = e.clientX; spin.lastT = t;
     }
@@ -592,7 +592,7 @@ async function boot() {
       document.documentElement.classList.add('grabbing');
       return;
     }
-    Object.assign(spin, { drag: true, id: e.pointerId, lastX: e.clientX, lastT: now(), v: 0 });
+    Object.assign(spin, { drag: true, id: e.pointerId, lastX: e.clientX, lastT: now(), v: 0, target: spin.a });
     document.documentElement.classList.add('spinning');
   });
   // a finger on him holds him instead of scrolling the page
@@ -616,7 +616,12 @@ async function boot() {
   addEventListener('pointercancel', endDrag);      // e.g. the browser took over for a vertical scroll
   // free spin with momentum, then he turns back to face his scene
   function spinStep(dt) {
-    if (spin.drag || dt <= 0) return spin.a;
+    if (dt <= 0) return spin.a;
+    if (spin.drag) {
+      // touch events arrive unevenly; ease toward the finger (~70 ms) so the turn glides
+      spin.a += (spin.target - spin.a) * (1 - Math.exp(-dt / 0.07));
+      return spin.a;
+    }
     spin.a += spin.v * dt;
     spin.v *= Math.exp(-dt * 3.2);
     if (now() - spin.released > 0.5 && Math.abs(spin.v) < 1.2) {
