@@ -33,6 +33,7 @@ In the NURF scene, four words link out (each opens in a new tab):
 - **ADL** → MFDA publications
 - **CAPD** → National Kidney Foundation: peritoneal dialysis
 - **Aasandha** → aasandha.mv
+- **NABH** → nabh.co
 
 They're in `index.html` (class `xlink`). The story text normally ignores taps so you can grab the character, so these links only become clickable while their scene is on screen (`#film.nurf-live`, set in `script.js`).
 
@@ -52,10 +53,10 @@ There are two timelines in `script.js`:
 | 0 | Intro | the page opens on "I am Nisham Sajjad," alone (typed in word by word); at the first scroll he drops out of the sky, lands in a deep knee bend, rises and smiles; the 8-years line follows |
 | 1.75 | Pharmacy (Thalassery Mission Hospital) | walks across the floor to the pharmacy door, reaches for the handle and pushes it open, walks in, and reappears behind the counter window, turning to us |
 | 3.7 | COVID | puts the mask on two-handed, as a person really does: holds it by both loops at his waist, lifts it to his face, hooks both loops over his ears, pinches the nose bridge, pulls it under his chin, lowers his hands |
-| 5.1 | NABH | a clipboard is tossed in on an arc; he catches it, holds it to his chest and sits down inside with it; "(NABH)" appears above the sign letter by letter |
+| 5.1 | NABH | a clipboard is tossed in on an arc; he catches it, holds it to his chest and sits down inside with it; "NABH" in the sentence links to nabh.co |
 | 7.1 | Maldives | plane flies in; he pilots with one hand and waves with the other |
 | 8.95 | NURF Pharmacy | crouches and leaps out of the cockpit (the plane flies on), crashes through the ceiling inside the Oncology Department, seen through its open glass door (a jagged hole, falling debris, dust), lands on his feet in the department, walks out through its door and into the NURF Pharmacy and sits down behind the counter at his laptop |
-| 11.6 | Responsibilities | he works at his laptop (typing in natural bursts) and swivels with the chair, right through to the end; the seven duties appear one by one and stay until the Connect page |
+| 11.6 | Responsibilities | he works at his laptop (typing in natural bursts) and swivels with the chair, right through to the end; the nine duties (including Managed Oncology Pharmacy and Following Up Chemotherapy Medicine) appear one by one and stay until the Connect page |
 | 15.2 | Connect | everything lifts away, the social-link orbit draws in |
 
 Between moments he is never frozen: idle, piloting and sitting loops keep running.
@@ -117,8 +118,8 @@ The NURF Pharmacy scene is a photo of an Oncology Department corridor with the p
 - `oncology.webp`: the photo with all the people removed (the customer, the three pharmacists, and the patient and staff member inside the department) (LaMa inpainting), the boards re-lettered in perspective ("ONCOLOGY Department", "NURF PHARMACY"), the ceiling and floor extended, and the top fading to dark for the story text.
 - `oncology-front.webp`: the same scene with the doorway and the pharmacy window cut out (monitors, sign and sanitiser kept). `hero3d.js` shows it once he's walked past the doorway, so the wall and the counter pass in front of him.
 - **Crash (real physics):** he drops through the ceiling of the department's room behind its open door. Everything is a pure function of the time since the `crash` label, so it scrubs both ways (`crashFx` in `hero3d.js`). The rigid pieces are simulated once at load (240 Hz steps, recorded at 60 Hz).
-  - **His fall:** free fall from the leap, the ceiling boards take about 40% of his speed as they break, then free fall again to the floor. `script.js` uses the same numbers for the tween's ease and the `crash` label.
-  - **Boards and gypsum crumbs:** gravity, air drag and spin. They bounce with restitution and tip over the corner that hits first, slide with Coulomb friction, then settle flat (a piece balanced on its edge topples).
+  - **His fall:** free fall from the leap, the ceiling boards take about 40% of his speed as they break, then free fall again to the floor. `script.js` uses the same numbers for the tween's ease and the `crash` label. He still carries the leap's forward speed (1.5 m/s toward us), so he drifts forward as he falls and skids to a stop as he lands on the department floor (`driftZ`).
+  - **Boards and gypsum crumbs:** gravity, air drag and spin. They bounce with restitution and tip over the corner that hits first, slide with Coulomb friction, then settle flat (a piece balanced on its edge topples). They're thrown forward with him, so they land on the department's floor in view through the door, and each casts a soft contact shadow that darkens as it nears the floor.
   - **Torn flaps:** they stay hinged to the hole and swing down as damped, non-linear pendulums.
   - **Dust:** powder pours out of the hole and drifts down at its low terminal speed. A cloud billows under the hole and settles, and puffs kick up where he and the big pieces hit the floor.
   - **Impacts:** the scene shakes briefly at the ceiling and at the floor (not with reduced motion).
@@ -131,8 +132,7 @@ The NURF Pharmacy scene is a photo of an Oncology Department corridor with the p
 All images live in `assets/img/`. The storyboard pages were flat images, so `tools/extract_assets.py` cut them into layers:
 
 - **Stage layers** keep the storyboard's **941×1672 canvas** so they stack exactly: `portrait`, `hospital`, `char-stand`, `char-mask`, `char-clipboard`, `igmh`, `chair`, `sitter`, `desk`.
-- **"(NABH)"** on the sign is a crisp SVG (`nabh-word.svg`) skewed to the sign's slant.
-- **Free layers**: `plane-empty`, `pilot`, `mask-item`, `cloud-1..3`, `avatar`. The clipboard he catches is an inline SVG, and "(NABH)" on the sign is a crisp SVG (`nabh-word.svg`) skewed to the sign's slant.
+- **Free layers**: `plane-empty`, `pilot`, `mask-item`, `cloud-1..3`, `avatar`. The clipboard he catches is an inline SVG.
 - `tools/extract_walk.py` cuts the five back-view walk frames (`tools/source/walk-*.jpg`) into `walk-1..5.webp`, aligned to the stage.
 - `tools/extract_mask.py` cuts the four mask-on frames (`tools/source/mask-*.jpg`) into `mask-1..4.webp` and tints the light-blue mask white to match the page-5 pose.
 - `tools/extract_rig.py` cuts the standing character into a puppet (upper body + two legs with hip joints) for the walk.

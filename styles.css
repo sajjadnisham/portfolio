@@ -87,11 +87,6 @@ html.lenis, html.lenis body { height: auto; }
   will-change: transform, opacity;
 }
 
-/* "(NABH)" word patch — coordinates are in storyboard pixels / 941×1672 */
-.nabh-word {
-  position: absolute;
-  left: 69.1%; top: 46.3%; width: 10.6%; height: 1.95%;      /* on the wall just above the sign's right end (canvas 650,774) */
-}
 .sign-glow {
   position: absolute;
   left: 17%; top: 44.5%; width: 58%; height: 8%;
