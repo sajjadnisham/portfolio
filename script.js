@@ -346,7 +346,7 @@
     wWA: 0, tTB: 0, wTB: 0, drift: 0, recoil: 0,
     mp: 0, wR: 0, wL: 0, ms: 0, mc: 0,                                               // mask
     cp: 0, cw: 0, wC: 0,                                                               // clipboard
-    tJ: 0.35, wJ: 0, gyP: 0,                                                           // jump from the plane
+    tJ: 0.55, wJ: 0, gyP: 0,                                                           // jump from the plane
     tLand: 0, wLand: 1, gyD: 1.4, tSTS: 0, wSTS: 0, wType: 0, bump: 0,                 // land, sit, type
     smile: 0,                                                                          // face (see face.js)
   };
@@ -380,16 +380,20 @@
   act.set(S3D, { cw: 1 }, 'mask');
   x3({ cp: 1, duration: 0.75 }, 'mask');
   x3({ wC: 1, duration: 0.37, ease: 'sine.out' }, 'mask+=0.35');
-  x3({ recoil: -0.04, duration: 0.07, ease: 'power1.out' }, 'mask+=0.75');
-  x3({ recoil: 0, duration: 0.28, ease: 'power2.out' }, 'mask+=0.82');
+  x3({ recoil: -0.025, duration: 0.12, ease: 'sine.out' }, 'mask+=0.74');   // a soft give as he catches it
+  x3({ recoil: 0, duration: 0.4, ease: 'sine.inOut' }, 'mask+=0.86');
   x3({ cp: 2, duration: 0.5, ease: 'power2.inOut' }, 'mask+=0.8');
   // S7 · crouch in the cockpit, leap out of frame; fall from above into his chair
-  x3({ wJ: 1, tJ: 0.85, duration: 0.25, ease: 'sine.in' }, 'files');
-  x3({ tJ: 1.6, duration: 0.5 }, 'files+=0.25');
-  x3({ gyP: 4.2, duration: 0.45, ease: 'power1.in' }, 'files+=0.3');
+  // crouch and launch: the jump clip eases into motion, then plays at one
+  // steady pace (1.2×; the clip's slow wind-up is skipped) — no change of speed mid-move, so no hitch
+  x3({ wJ: 1, duration: 0.3, ease: 'sine.inOut' }, 'files');
+  x3({ tJ: 0.703, duration: 0.2, ease: 'sine.in' }, 'files');
+  x3({ tJ: 1.363, duration: 0.55 }, 'files+=0.2');
+  x3({ gyP: 4.2, duration: 0.45, ease: 'power2.in' }, 'files+=0.3');
   // drops in from above (the Landing clip's own fall), lands on his feet in front of the chair…
   x3({ gyD: 0, duration: 0.3, ease: 'power2.in' }, 'files+=0.95');
-  x3({ tLand: 1.4, duration: 1.4 }, 'files+=0.95');
+  x3({ tLand: 0.2, duration: 0.25, ease: 'sine.in' }, 'files+=0.9');      // the landing clip eases into motion…
+  x3({ tLand: 1.4, duration: 1.2 }, 'files+=1.15');                       // …then plays at its own pace
   // …sits back into it (the chair takes his weight), then settles at the keyboard
   x3({ wLand: 0, wSTS: 1, duration: 0.3, ease: 'sine.inOut' }, 'files+=2.2');
   x3({ tSTS: 2.23, duration: 2.23 }, 'files+=2.2');
