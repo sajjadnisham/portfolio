@@ -241,6 +241,20 @@ async function boot() {
   const curveA = new THREE.CatmullRomCurve3([P0, V3(-0.9, 0, -4.35), V3(DOOR.x, 0, WALL_Z + 0.8), DOORP], false, 'centripetal');
   const curveB = new THREE.CatmullRomCurve3([DOORP, V3(DOOR.x, 0, WALL_Z - 0.45), V3(DOOR.x + 0.55, 0, LANE_Z), STAND], false, 'centripetal');
   const lenA = curveA.getLength(), lenB = curveB.getLength();
+  // Walking heading, averaged over ±0.4 m of the path (Gaussian weights): a
+  // spline's tangent turns at a rate that can jump where it passes a control
+  // point, which shows as a twitch in his shoulders and arms; the averaged
+  // heading turns with a continuous rate, the way a walker leans into a bend.
+  // tanAt(d) is the path's tangent d metres along it.
+  const headingAt = (tanAt, d, total) => {
+    let x = 0, z = 0;
+    for (let k = -6; k <= 6; k++) {
+      const w = Math.exp(-((k / 3) ** 2)), T = tanAt(THREE.MathUtils.clamp(d + k * 0.4 / 6, 0, total));
+      x += T.x * w; z += T.z * w;
+    }
+    return Math.atan2(x, z);
+  };
+  const tanH = (d) => (d < lenA ? curveA.getTangentAt(d / lenA) : curveB.getTangentAt(Math.min(1, (d - lenA) / lenB)));
   const MARK = STAND;                                                // (the clipboard is tossed to him here)
   const SIT_BACK = rootAt('standToSit', 2.23)[1];                    // sitting down takes him back ~0.44 m
   const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -747,8 +761,7 @@ async function boot() {
         const onB = s.dB > 0;
         const u = THREE.MathUtils.clamp(onB ? s.dB : s.dA, 0, 1);
         const P = onB ? curveB.getPointAt(u) : curveA.getPointAt(u);
-        const T = onB ? curveB.getTangentAt(u) : curveA.getTangentAt(u);
-        let yaw = lerpA(0, Math.atan2(T.x, T.z), s.turnA);
+        let yaw = lerpA(0, headingAt(tanH, (onB ? lenA : 0) + u * (onB ? lenB : lenA), lenA + lenB), s.turnA);
         yaw = lerpA(yaw, 0, s.faceCam);
         setAct('land', s.tLandH, s.wLandH);
         setAct('walk', (dist / walkStride * walkDur) % walkDur, s.wWalk);     // feet locked to the distance walked
@@ -783,14 +796,14 @@ async function boot() {
          and sits down at the counter to work. */
       const typeT = typeClock(dt);
       const u = paceD(s.dW);
-      const Pd = curveD.getPointAt(u), Td = curveD.getTangentAt(u);
+      const Pd = curveD.getPointAt(u);
       setAct('land', s.tLand, s.wLand);
       setAct('walk', (u * lenD / walkStride * walkDur) % walkDur, s.wWalkD);   // feet locked to the floor
       setAct('standToSit', s.tSTS, s.wSTS);
       setAct('typing', typeT, s.wType);
       setAct('idle', tClock % A.idle.getClip().duration, Math.max(0, 1 - s.wLand - s.wWalkD - s.wSTS - s.wType));
       const seated = s.wType + s.wSTS * THREE.MathUtils.smoothstep(s.tSTS, 1.3, 1.6);
-      let yaw = lerpA(0, Math.atan2(Td.x, Td.z), s.turnD);
+      let yaw = lerpA(0, headingAt((d) => curveD.getTangentAt(d / lenD), u * lenD, lenD), s.turnD);
       yaw = lerpA(yaw, 0, s.faceD);
       const swivel = (gsap.getProperty(el.chair, 'rotationY') || 0) * Math.PI / 180 * seated;
       rig.position.set(Pd.x, s.gyD, Pd.z + s.wSTS * rootAt('standToSit', s.tSTS)[1] + s.wType * rootAt('standToSit', 2.23)[1]);
@@ -1320,29 +1333,34 @@ async function boot() {
      IK weight changes without making him feel laggy. */
   const bones = [];
   avatar.traverse((o) => { if (o.isBone) bones.push(o); });
-  // Two filter stages in series (a critically damped, 2nd-order smoother):
-  // the pose is continuous AND so is its speed, so every move eases in and
-  // out instead of changing pace abruptly. ~30 ms per stage.
-  const prevQ = new Float32Array(bones.length * 4), prevQ2 = new Float32Array(bones.length * 4);
-  const prevHips = new THREE.Vector3(), prevHips2 = new THREE.Vector3();
-  const _qsm = new THREE.Quaternion(), _qs2 = new THREE.Quaternion();
+  // Three filter stages in series (a critically damped, 3rd-order smoother):
+  // the pose, its speed AND its acceleration are all continuous, so a move
+  // can't jolt even where a clip, a blend or the IK changes its pace
+  // abruptly: motion flows like butter. ~21 ms per stage (about the same
+  // total lag as the earlier two 30 ms stages).
+  const prevQ = new Float32Array(bones.length * 4), prevQ2 = new Float32Array(bones.length * 4), prevQ3 = new Float32Array(bones.length * 4);
+  const prevHips = new THREE.Vector3(), prevHips2 = new THREE.Vector3(), prevHips3 = new THREE.Vector3();
+  const _qsm = new THREE.Quaternion(), _qs2 = new THREE.Quaternion(), _qs3 = new THREE.Quaternion();
   let havePrev = false;
   function smoothPose(dt, snap) {
     if (!snap && havePrev) {
-      const k = 1 - Math.exp(-dt / (0.03 + 0.2 * jumpBlend));    // longer right after a jump
+      const k = 1 - Math.exp(-dt / (0.021 + 0.14 * jumpBlend));  // longer right after a jump
       for (let i = 0; i < bones.length; i++) {
         _qsm.fromArray(prevQ, i * 4).slerp(bones[i].quaternion, k);   // stage 1
         _qsm.toArray(prevQ, i * 4);
         _qs2.fromArray(prevQ2, i * 4).slerp(_qsm, k);                // stage 2
         _qs2.toArray(prevQ2, i * 4);
-        bones[i].quaternion.copy(_qs2);
+        _qs3.fromArray(prevQ3, i * 4).slerp(_qs2, k);                // stage 3
+        _qs3.toArray(prevQ3, i * 4);
+        bones[i].quaternion.copy(_qs3);
       }
       prevHips.lerp(B.hips.position, k);
       prevHips2.lerp(prevHips, k);
-      B.hips.position.copy(prevHips2);
+      prevHips3.lerp(prevHips2, k);
+      B.hips.position.copy(prevHips3);
     } else {
-      for (let i = 0; i < bones.length; i++) { bones[i].quaternion.toArray(prevQ, i * 4); bones[i].quaternion.toArray(prevQ2, i * 4); }
-      prevHips.copy(B.hips.position); prevHips2.copy(B.hips.position);
+      for (let i = 0; i < bones.length; i++) { bones[i].quaternion.toArray(prevQ, i * 4); bones[i].quaternion.toArray(prevQ2, i * 4); bones[i].quaternion.toArray(prevQ3, i * 4); }
+      prevHips.copy(B.hips.position); prevHips2.copy(B.hips.position); prevHips3.copy(B.hips.position);
     }
     havePrev = true;
   }

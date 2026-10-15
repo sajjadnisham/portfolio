@@ -397,11 +397,14 @@
   x3({ wR: 0, wL: 0, duration: 0.2, ease: 'sine.inOut' }, 'hosp+=5.0');
   // S5 · clipboard tossed in, caught with a little recoil, brought to his chest
   act.set(S3D, { cw: 1 }, 'mask');
-  x3({ cp: 1, duration: 0.75 }, 'mask');
-  x3({ wC: 1, duration: 0.37, ease: 'sine.out' }, 'mask+=0.35');
+  // the board flies in and his hand meets it, taking some of its speed (it
+  // arrives at 60% of its flight speed, not stopping dead), the reach blending
+  // in and out smoothly
+  x3({ cp: 1, duration: 0.75, ease: (p) => 0.6 * p + 0.4 * Math.sin(p * Math.PI / 2) }, 'mask');
+  x3({ wC: 1, duration: 0.47, ease: 'sine.inOut' }, 'mask+=0.25');
   x3({ recoil: -0.025, duration: 0.12, ease: 'sine.out' }, 'mask+=0.74');   // a soft give as he catches it
   x3({ recoil: 0, duration: 0.4, ease: 'sine.inOut' }, 'mask+=0.86');
-  x3({ cp: 2, duration: 0.5, ease: 'power2.inOut' }, 'mask+=0.8');
+  x3({ cp: 2, duration: 0.55, ease: 'sine.inOut' }, 'mask+=0.77');
   // …and sits down inside with the files
   x3({ wSitH: 1, duration: 0.35, ease: 'sine.inOut' }, 'mask+=1.35');
   x3({ tSitH: 2.23, duration: 2.23 }, 'mask+=1.35');
