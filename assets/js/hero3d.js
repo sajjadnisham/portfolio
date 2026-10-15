@@ -911,9 +911,18 @@ async function boot() {
     const st = document.documentElement.style;
     st.setProperty('--px', par.x.toFixed(4)); st.setProperty('--py', par.y.toFixed(4));
   }
+  let dtS = 0, timeDebt = 0;
   function loop() {
     if (!running) return;
-    const dt = Math.min(clock.getDelta(), 0.1);
+    // Frame timing on phones is irregular (16.7 ms frames arriving as 12 / 21 ms
+    // pairs). Animating with the raw gap makes motion stutter; a lightly
+    // smoothed step keeps movement even while staying in step with real time.
+    const raw = Math.min(clock.getDelta(), 0.1);
+    dtS = raw > 0.05 || dtS === 0 ? raw : dtS + (raw - dtS) * 0.25;
+    timeDebt += raw - dtS;                                          // never drift from real time
+    const fix = THREE.MathUtils.clamp(timeDebt * 0.2, -0.004, 0.004);
+    timeDebt -= fix;
+    const dt = Math.max(0, dtS + fix);
     tClock += dt;
     parallax(dt);
     pose(dt);

@@ -38,7 +38,7 @@ export function buildMinifig(avatar) {
   });
   const mat = {
     skin: plastic(COL.skin), hair: plastic(COL.hair, { roughness: 0.45 }), beard: plastic(COL.beard, { roughness: 0.5 }),
-    coat: plastic(COL.body), apron: plastic(COL.apron, { roughness: 0.45, side: THREE.DoubleSide }), apronLine: plastic(COL.apronLine, { roughness: 0.5 }),
+    coat: plastic(COL.apron, { roughness: 0.42 }), apron: plastic(COL.apron, { roughness: 0.45, side: THREE.DoubleSide }), apronLine: plastic(COL.apronLine, { roughness: 0.5 }),
     trousers: plastic(COL.trousers), feet: plastic(COL.feet),
     eye: plastic(COL.eye, { roughness: 0.2 }), white: plastic(0xffffff, { roughness: 0.15 }), teeth: plastic(COL.teeth),
     pen: plastic(COL.pen), badge: plastic(COL.badge), badgeCard: plastic(COL.badgeCard),
@@ -113,47 +113,58 @@ export function buildMinifig(avatar) {
     g.computeVertexNormals();
     addSkinned(g, mat.coat, spineW);
   }
-  /* ---------- white apron: bib on the chest, skirt to the knees ---------- */
+  /* ---------- full clinical coat: white body and sleeves (above), collar,
+     lapels, buttons, pockets with a red pen, ID badge, and a skirt that wraps
+     all the way round to the knees ---------- */
   const FRONT = T_Z + T_D / 2;
   {
-    // bib: follows the torso exactly (same spine weights), a little proud of it
-    const bib = new THREE.Shape(), bw0 = 0.13, bw1 = 0.17, y0 = 1.39, y1 = 0.97;
-    bib.moveTo(-bw0, y0); bib.lineTo(bw0, y0); bib.lineTo(bw1, y1); bib.lineTo(-bw1, y1); bib.closePath();
-    const g = new THREE.ExtrudeGeometry(bib, { depth: 0.006, bevelEnabled: true, bevelSize: 0.006, bevelThickness: 0.004, bevelSegments: 2 });
-    g.translate(0, 0, FRONT + 0.016);
-    g.computeVertexNormals();
-    addSkinned(g, mat.apron, spineW);
-    // breast pocket with a red pen, and the ID badge on the bib
-    const pk = new THREE.Shape(); pk.moveTo(-0.045, 1.33); pk.lineTo(0.045, 1.33); pk.lineTo(0.045, 1.25); pk.lineTo(-0.045, 1.25); pk.closePath();
-    const pg = new THREE.ExtrudeGeometry(pk, { depth: 0.004, bevelEnabled: false });
-    pg.translate(0.06, 0, FRONT + 0.028); addSkinned(pg, mat.apronLine, spineW);
-    const pen = new THREE.CylinderGeometry(0.0065, 0.0065, 0.07, 12); pen.translate(0.04, 1.335, FRONT + 0.034); addSkinned(pen, mat.pen, spineW);
-    const badge = new THREE.BoxGeometry(0.055, 0.075, 0.006); badge.translate(-0.075, 1.28, FRONT + 0.03); addSkinned(badge, mat.badge, spineW);
-    const card = new THREE.BoxGeometry(0.042, 0.038, 0.004); card.translate(-0.075, 1.272, FRONT + 0.035); addSkinned(card, mat.badgeCard, spineW);
-    // neck straps from the bib's top corners up and over the shoulders
+    // lapels + collar band, following the torso (same spine weights)
     for (const sx of [-1, 1]) {
-      const st = new THREE.BoxGeometry(0.03, 0.14, 0.008);
-      st.rotateX(-0.55); st.translate(sx * 0.105, 1.45, FRONT - 0.02);
-      addSkinned(st, mat.apron, spineW);
+      const l = new THREE.Shape();
+      l.moveTo(sx * 0.02, T_TOP - 0.01); l.lineTo(sx * 0.13, T_TOP - 0.03); l.lineTo(sx * 0.075, 1.3); l.lineTo(sx * 0.012, 1.16); l.closePath();
+      const g = new THREE.ExtrudeGeometry(l, { depth: 0.006, bevelEnabled: true, bevelSize: 0.004, bevelThickness: 0.003, bevelSegments: 2 });
+      g.translate(0, 0, FRONT + 0.006); g.computeVertexNormals();
+      addSkinned(g, mat.apronLine, spineW);
     }
-    // waist band with ties
-    const band = new THREE.BoxGeometry(0.44, 0.035, T_D + 0.024); band.translate(0, 1.0, T_Z); addSkinned(band, mat.apron, spineW);
+    const collar = new THREE.CylinderGeometry(0.085, 0.095, 0.045, 32, 1, true, Math.PI * 0.15, Math.PI * 1.7);
+    collar.translate(0, T_TOP + 0.005, T_Z); addSkinned(collar, mat.apron, spineW);
+    for (const y of [1.24, 1.14, 1.04]) {
+      const btn = new THREE.CylinderGeometry(0.009, 0.009, 0.006, 14); btn.rotateX(Math.PI / 2); btn.translate(0, y, FRONT + 0.006);
+      addSkinned(btn, mat.apronLine, spineW);
+    }
+    const pk = new THREE.BoxGeometry(0.075, 0.07, 0.006); pk.translate(0.1, 1.3, FRONT + 0.004); addSkinned(pk, mat.apronLine, spineW);
+    const pen = new THREE.CylinderGeometry(0.0065, 0.0065, 0.07, 12); pen.translate(0.085, 1.335, FRONT + 0.011); addSkinned(pen, mat.pen, spineW);
+    const badge = new THREE.BoxGeometry(0.055, 0.075, 0.006); badge.translate(-0.1, 1.29, FRONT + 0.005); addSkinned(badge, mat.badge, spineW);
+    const card = new THREE.BoxGeometry(0.042, 0.038, 0.004); card.translate(-0.1, 1.282, FRONT + 0.01); addSkinned(card, mat.badgeCard, spineW);
   }
   {
-    // skirt: two halves from the waist to the knees; the front follows the
-    // thighs (so he can stride and sit), the top stays with the hips
-    const knee = P('LeftLeg').y;
+    // the coat's skirt: an open-fronted wrap from the waist to the knees. Each
+    // side follows its thigh (front fully, back partly), so he can stride and sit.
+    const knee = P('LeftLeg').y, ytop = 1.03, ybot = knee + 0.03;
+    const N = 48, ROWS = 16, GAP = 0.18, verts = [], idx = [];
+    for (let r = 0; r <= ROWS; r++) {
+      const v = r / ROWS, y = ytop + (ybot - ytop) * v;
+      const rx = 0.245 + 0.025 * v, rz = 0.155 + 0.02 * v;           // roomy over the hips, a little flare toward the hem
+      for (let j = 0; j <= N; j++) {
+        const ang = Math.PI / 2 + GAP + (Math.PI * 2 - 2 * GAP) * (j / N);
+        verts.push(Math.cos(ang) * rx, y, T_Z + Math.sin(ang) * rz);
+      }
+      if (r > 0) { const b0 = (r - 1) * (N + 1), b1 = r * (N + 1); for (let j = 0; j < N; j++) idx.push(b0 + j, b1 + j, b0 + j + 1, b0 + j + 1, b1 + j, b1 + j + 1); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3)); g.setIndex(idx); g.computeVertexNormals();
+    addSkinned(g, mat.apron, (p) => {
+      const depth = ss(ytop - p.y, 0.02, 0.18);
+      const front = ss((p.z - T_Z) / 0.155, -0.6, 0.7);               // 0 at the back … 1 at the front
+      const side = ss(Math.abs(p.x) / 0.23, 0.05, 0.35);             // the centre back stays with the hips
+      const wt = depth * (0.35 + 0.65 * front) * Math.max(side, front);
+      return [['Hips', 1 - wt], [p.x >= 0 ? 'LeftUpLeg' : 'RightUpLeg', wt]];
+    });
+    // hip pockets
     for (const sx of [-1, 1]) {
-      const ytop = 1.0, ybot = knee + 0.06, w = 0.208;
-      const g = new THREE.PlaneGeometry(w, ytop - ybot, 2, 14);       // subdivided so it bends smoothly
-      g.translate(sx * (0.006 + w / 2), (ytop + ybot) / 2, 0);
-      // stand clear of the thigh blocks (front at ~0.09 m) with a gentle outward curve
-      { const q = g.attributes.position; for (let i = 0; i < q.count; i++) { const u = (q.getX(i) - sx * 0.006) / (sx * w); q.setZ(i, FRONT + 0.03 - 0.025 * u * u); } }
-      g.computeVertexNormals();
-      addSkinned(g, mat.apron, (p) => {
-        const depth = ss(1.0 - p.y, 0.02, 0.16);
-        return [['Hips', 1 - depth], [sx > 0 ? 'LeftUpLeg' : 'RightUpLeg', depth]];
-      });
+      const hp = new THREE.BoxGeometry(0.08, 0.075, 0.006); hp.rotateY(sx * 0.5);
+      hp.translate(sx * 0.16, 0.86, T_Z + 0.135);
+      addSkinned(hp, mat.apronLine, () => [['Hips', 1 - 0.4], [sx > 0 ? 'LeftUpLeg' : 'RightUpLeg', 0.4]]);
     }
   }
 
