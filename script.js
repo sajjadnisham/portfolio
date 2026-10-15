@@ -100,6 +100,7 @@
   const clip = $('.ch-clip');
   const files = $('.files');
   const pharmDoor = $('.pharm-door');
+  const pzoom = $('.pzoom');
   const DOOR_SWING = 68;                 // degrees the door swings in (CSS rotationY)
 
   const cam = $('.cam');
@@ -177,6 +178,7 @@
   gsap.set(clip, { opacity: 0, transformOrigin: origin(CLIP), ...place(CLIP, HERO) });
   gsap.set(files, { opacity: 0 });
   gsap.set(setA, { transformOrigin: '75% 60%' });
+  gsap.set(pzoom, { transformOrigin: '50.8% 61%' });          // the counter window (canvas 478, 1020)
   gsap.set(cam, { yPercent: 100 });                                        // IGMH waits below
   gsap.set([chair, sitterRig], { transformOrigin: '50% 59%', transformPerspective: 900 });
   // the pharmacy door hinges on its left edge (canvas x 92) and swings inward
@@ -339,7 +341,7 @@
      Timings: turn-and-walk clip 2.7 s (1.5 m), walk 1.44 m/s.
      --------------------------------------------------------- */
   const S3D = {
-    tLandH: 0, wLandH: 1, gyH: 1.8,                                                   // intro: falls from the sky
+    tLandH: 0, wLandH: 1, gyH: 3.6,                                                   // intro: falls from the sky
     wIdle: 0, turnA: 0, dA: 0, dB: 0, wWalk: 0, faceCam: 0, inside: 0,               // walk into the pharmacy
     wDoor: 0, door: 0,                                                                 // opens the door
     recoil: 0,
@@ -367,6 +369,8 @@
   act.set(S3D, { inside: 1 }, 7.9);
   x3({ wWalk: 0, duration: 0.45, ease: 'sine.inOut' }, 7.6);
   x3({ faceCam: 1, duration: 0.6, ease: 'sine.inOut' }, 7.75);               // turns to us at the window
+  // once he's at the window, the view eases in toward it
+  act.fromTo(pzoom, { scale: 1 }, { scale: () => (G.desk ? 1.2 : 1.28), duration: 1.4, ease: 'sine.inOut', immediateRender: false }, 7.5);
   // S4 · mask: hand to pocket, mask out, up to his face, loops over the ears, hands down
   // Two-handed, as in a real mask-on (mp = position along both hands' mirrored
   // path: 0 rest · 1 waist · 2 chest · 3 face · 4 ears · 5 nose · 6 chin · 7 rest).
@@ -550,6 +554,7 @@
   tl.to([chair, sitterRig], { rotationY: 0, duration: 0.8, ease: 'sine.inOut' }, 13.9);
 
   /* S9 · Connect with me */
+  tl.to('.scroll-cue', { opacity: 0, duration: 0.4 }, 15.0);
   tl.fromTo(stage, stageAt('B2'), {
     x: () => G.B2.x, y: () => G.B2.y - G.vh * 1.15 * M,
     duration: 0.8, ease: 'power2.in', immediateRender: false,
