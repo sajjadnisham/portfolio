@@ -406,6 +406,41 @@ export function buildCartoon(avatar) {
   /* ---------------- assemble ---------------- */
   // hide the original realistic meshes; keep their skeleton
   avatar.traverse((o) => { if (o.isMesh && !o.userData.cartoon) o.visible = false; });
+  // Parts that move on their own (lids, brows, mouth) or get hidden under the
+  // mask stay separate objects on their bones. Every other rigid part is baked
+  // into one skinned mesh per material (each vertex fully on its own bone):
+  // the same look, but a handful of draw calls instead of ~75, so phones hold a
+  // steady frame rate.
+  for (const o of [...lids, ...brows, nose, mous, mouth]) o.userData.live = true;
+  const bake = new Map();                                            // material → [geometry, bone]
+  for (const [obj, b] of rigid) {
+    obj.updateMatrixWorld(true);                                    // world rest pose (no parent yet)
+    const statics = [];
+    obj.traverse((o) => {
+      if (!o.isMesh || !o.geometry.index) return;
+      let live = false; o.traverseAncestors((x) => { if (x.userData.live) live = true; });
+      if (o.userData.live || live) return;
+      statics.push(o);
+    });
+    for (const o of statics) {
+      const g = o.geometry.clone();
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+      if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+      g.applyMatrix4(o.matrixWorld);
+      const n = g.attributes.position.count, k = bi(b);
+      g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(n * 4).map((_, i) => (i % 4 === 0 ? k : 0)), 4));
+      g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(new Float32Array(n * 4).map((_, i) => (i % 4 === 0 ? 1 : 0)), 4));
+      if (!bake.has(o.material)) bake.set(o.material, []);
+      bake.get(o.material).push(g);
+      o.parent ? o.parent.remove(o) : (o.userData.gone = true);
+    }
+  }
+  for (const [material, geos] of bake) {
+    for (const g of geos) for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'skinIndex', 'skinWeight'].includes(k)) g.deleteAttribute(k);
+    const merged = mergeGeometries(geos);
+    if (merged) skinnedParts.push([merged, material]);
+  }
+
   const skel = new THREE.Skeleton(bones);                            // inverses from the current rest pose
   const parts = new THREE.Group(); parts.name = 'cartoon';
   avatar.add(parts);
@@ -416,7 +451,11 @@ export function buildCartoon(avatar) {
     parts.add(m); m.updateMatrixWorld(true);
     m.bind(skel, m.matrixWorld);
   }
+  // what's left of the rigid parts (the live face pieces) rides its bone
   for (const [obj, b] of rigid) {
+    if (obj.userData.gone) continue;
+    let any = false; obj.traverse((o) => { if (o.isMesh) any = true; });
+    if (!any) continue;
     obj.updateMatrixWorld(true);
     b.attach(obj);
     obj.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.userData.cartoon = true; } });

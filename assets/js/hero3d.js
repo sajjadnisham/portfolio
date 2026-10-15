@@ -444,8 +444,12 @@ async function boot() {
   // keep last frame's edited value and feed it back in: visible jitter. Forget
   // the mixer's "last applied" values so every bone is re-posed every frame.
   function freshPose() {
+    // Only the region the next update compares against is cleared (the mixer
+    // alternates two result regions); the region it writes into is left alone,
+    // so a property no clip animates still resolves to its rest value.
+    const prev = mixer._accuIndex | 0;
     for (const b of mixer._bindings || []) {
-      if (b && b.buffer && b.valueSize) b.buffer.fill(NaN, b.valueSize, b.valueSize * 3);
+      if (b && b.buffer && b.valueSize) b.buffer.fill(NaN, prev * b.valueSize + b.valueSize, prev * b.valueSize + 2 * b.valueSize);
     }
   }
   const setAct = (name, time, weight) => { const a = A[name]; a.time = time; a.weight = weight; };
