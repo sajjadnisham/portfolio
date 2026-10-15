@@ -738,7 +738,7 @@ async function boot() {
   // Head (with a little neck and chest) turns to follow the pointer, as if it
   // were someone just in front of the screen. Eased like a real glance;
   // stands down while his hands or the big moves need his head.
-  const look = { yaw: 0, pitch: 0, w: 0 };
+  const look = { yaw: 0, pitch: 0, w: 0, y1: 0, p1: 0, w1: 0 };   // two-stage eased (glances start and stop softly)
   const _ray = new THREE.Raycaster(), _nd = new THREE.Vector2(), _pl = new THREE.Plane();
   const _hd = new THREE.Vector3(), _cp = new THREE.Vector3(), _tgt = new THREE.Vector3();
   const _L = new THREE.Vector3(), _R = new THREE.Vector3(), _fw = new THREE.Vector3(), _up = new THREE.Vector3();
@@ -772,8 +772,9 @@ async function boot() {
     const yaw = Math.atan2(_fw.clone().cross(dir).dot(_up), dir.dot(_fw));
     const pitch = Math.asin(THREE.MathUtils.clamp(dir.dot(_up), -1, 1));
     const yT = THREE.MathUtils.clamp(yaw, -1.0, 1.0), pT = THREE.MathUtils.clamp(pitch, -0.3, 0.3);
-    const k = 1 - Math.exp(-dt * 7);                               // a glance takes ~0.3 s
-    look.yaw += (yT - look.yaw) * k; look.pitch += (pT - look.pitch) * k;
+    const k = 1 - Math.exp(-dt * 11);                              // two stages: a glance takes ~0.3 s
+    look.y1 += (yT - look.y1) * k; look.p1 += (pT - look.p1) * k;
+    look.yaw += (look.y1 - look.yaw) * k; look.pitch += (look.p1 - look.pitch) * k;
 
     for (const [bone, share] of [[B.spine2, 0.2], [B.neck, 0.3], [B.head, 0.5]]) {
       _qa.setFromAxisAngle(_up, look.yaw * share * look.w);
