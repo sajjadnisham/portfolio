@@ -90,7 +90,7 @@ html.lenis, html.lenis body { height: auto; }
 /* "(NABH)" word patch — coordinates are in storyboard pixels / 941×1672 */
 .nabh-word {
   position: absolute;
-  left: 53.667%; top: 40.371%; width: 18.597%; height: 9.270%;
+  left: 69.1%; top: 46.3%; width: 10.6%; height: 1.95%;      /* on the wall just above the sign's right end (canvas 650,774) */
 }
 .sign-glow {
   position: absolute;
@@ -396,3 +396,45 @@ html.lenis, html.lenis body { height: auto; }
   text-shadow: 0 0 12px rgba(255,255,255,.45); outline: none;
 }
 .xlink:focus-visible { outline: 1px solid rgba(255,255,255,.6); outline-offset: 3px; border-radius: 2px; }
+
+/* ---------- Pharmacy scene layers ---------- */
+.pharm-front { opacity: 0; pointer-events: none; }       /* hero3d.js shows it while he's inside */
+.pharm-door { will-change: transform; backface-visibility: hidden; }
+
+/* ---------- Pharmacy play: medicine card + hint ---------- */
+.medcard {
+  position: absolute; z-index: 40; left: 50%; top: max(14px, env(safe-area-inset-top));
+  width: min(92vw, 360px); transform: translate(-50%, -12px); opacity: 0; pointer-events: none;
+  background: rgba(255,255,255,.97); color: #14213d; border-radius: 16px;
+  border-top: 6px solid var(--med, #1b3b8f);
+  box-shadow: 0 18px 50px rgba(0,0,0,.45);
+  padding: 16px 18px 14px; font-size: 14px; line-height: 1.45;
+  transition: opacity .35s ease, transform .35s cubic-bezier(.2,.8,.2,1);
+}
+.medcard.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.medcard-k { margin: 0 0 2px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #5b6b8c; }
+.medcard h3 { margin: 0 0 8px; font-size: 19px; color: var(--med, #1b3b8f); filter: brightness(.8); }
+.medcard dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+.medcard dt { font-weight: 700; color: #33415e; white-space: nowrap; }
+.medcard dd { margin: 0; }
+.medcard-back {
+  margin-top: 12px; width: 100%; padding: 10px; border: 0; border-radius: 10px; cursor: pointer;
+  background: #1b3b8f; color: #fff; font: inherit; font-weight: 700;
+}
+.medcard-back:hover, .medcard-back:focus-visible { background: #24489f; outline: none; }
+.medcard-x {
+  position: absolute; right: 8px; top: 6px; width: 32px; height: 32px; border: 0; background: none;
+  font-size: 22px; color: #5b6b8c; cursor: pointer; border-radius: 50%;
+}
+.medcard-n { margin: 10px 0 0; font-size: 11px; color: #6b778f; }
+@media (max-width: 400px) { .medcard dl { grid-template-columns: 1fr; } .medcard dt { margin-top: 4px; } }
+
+.pharm-hint {
+  position: absolute; z-index: 30; left: 50%; bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translate(-50%, 8px); opacity: 0; pointer-events: none;
+  padding: 9px 16px; border-radius: 999px; font-size: 13px; color: #fff; white-space: nowrap;
+  background: rgba(20, 33, 61, .78); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: opacity .5s ease, transform .5s ease;
+}
+.pharm-hint.on { opacity: 1; transform: translate(-50%, 0); }
+@media (max-width: 380px) { .pharm-hint { white-space: normal; text-align: center; width: 86vw; } }

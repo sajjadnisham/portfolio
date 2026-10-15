@@ -226,16 +226,25 @@ async function boot() {
   const at = (cam, u, v, d) => new THREE.Vector3((u - cam.userData.W / 2) * d / cam.userData.f, cam.userData.eye - (v - cam.userData.hz) * d / cam.userData.f, -d);
   const depthForFeet = (cam, v) => cam.userData.f * cam.userData.eye / (v - cam.userData.hz);
 
-  // Hospital: feet on row 1613 and 748 px tall at x 713 → eye height 1.6 m.
-  const camH = paintedCamera(941, 1672, 2297, 963, 1.84 * (1613 - 963) / 748);
-  const dMark = depthForFeet(camH, 1613);
-  const MARK = at(camH, 713, 1613, dMark); MARK.y = 0;
-  const P0 = new THREE.Vector3((650 - 470.5) * 3.2 / 2297, 0, -3.2);        // where he lands (opening), right of centre
-  const WALK_K = (() => {
-    const need = MARK.z - P0.z - rootAt('turnWalk', 99)[1] - rootAt('turnWalkB', 99)[1];
-    const natural = -walkSpeed * (S3D.waEnd - S3D.waStart);
-    return THREE.MathUtils.clamp(need / natural, 0.8, 1.25);
-  })();
+  // Pharmacy (tools/make_pharmacy.py): the photo's camera is level, horizon on
+  // row 1027, f = 858 px; the counter top (1 m) and the floor line give 143 px
+  // per metre at the wall → wall 6 m away, eye height 1.57 m.
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const camH = paintedCamera(941, 1672, 858, 1027, 1.566);
+  const WALL_Z = -6.0, LANE_Z = -6.9, SHELF_Z = -8.2;
+  const toX = (u, d) => (u - 470.5) * d / 858;                       // canvas column → metres at depth d
+  const DOOR = { hingeX: toX(92, 6), x: toX(141.5, 6), handle: V3(toX(180, 6), 1.0, WALL_Z) };
+  const WIN = { x0: toX(206, 6) + 0.1, x1: toX(749, 6) - 0.1 };     // window, metres
+  const P0 = V3(toX(560, 3), 0, -3.0);                              // where he lands (opening)
+  const STAND = V3(0.0, 0, LANE_Z);                                  // at the window, between the posts
+  const DOORP = V3(DOOR.x, 0, WALL_Z + 0.45);                         // in front of the door
+  const curveA = new THREE.CatmullRomCurve3([P0, V3(-0.9, 0, -4.35), V3(DOOR.x, 0, WALL_Z + 0.8), DOORP], false, 'centripetal');
+  const curveB = new THREE.CatmullRomCurve3([DOORP, V3(DOOR.x, 0, WALL_Z - 0.45), V3(DOOR.x + 0.55, 0, LANE_Z), STAND], false, 'centripetal');
+  const lenA = curveA.getLength(), lenB = curveB.getLength();
+  const MARK = STAND;                                                // (the clipboard is tossed to him here)
+  const SIT_BACK = rootAt('standToSit', 2.23)[1];                    // sitting down takes him back ~0.44 m
+  const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  const lerpA = (a, b, t) => a + wrapA(b - a) * t;
   // IGMH desk: horizon at his eye line (row 760), 560 px per metre at the chair.
   const camD = paintedCamera(941, 1672, 2297, 760, 1.2);
   const dDesk = 2297 / 560;
@@ -477,30 +486,35 @@ async function boot() {
     board.visible = false;
 
     if (f === 'H') {
-      /* Mission Hospital: drops out of the sky into the close-up, lands →
-         turns → walks toward the hospital → turns back → mark, then the mask
-         and the clipboard. */
-      const idleT = tClock % A.idle.getClip().duration;
-      setAct('land', s.tLandH, s.wLandH);
-      setAct('idle', idleT, s.wIdle);
-      setAct('turnWalk', s.tTW, s.wTW);
-      setAct('walkB', s.tWA % walkDur, s.wWA);
-      setAct('turnWalkB', s.tTB, s.wTB);
-
-      const [rx1, rz1] = rootAt('turnWalk', s.tTW);
-      const [rx2, rz2] = rootAt('turnWalkB', s.tTB);
-      const walked = -walkSpeed * WALK_K * Math.max(0, s.tWA - s.waStart);   // walking away (−z), after the turn's own travel
-      rig.position.set(
-        THREE.MathUtils.lerp(P0.x, MARK.x, s.drift) + (s.tTW > 0 ? rx1 : 0) + (s.tTB > 0 ? rx2 : 0),
-        s.gyH,                                          // still falling in from above
-        P0.z + (s.tTW > 0 ? rz1 : 0) + walked + (s.tTB > 0 ? rz2 : 0),
-      );
-      rig.position.z += s.recoil;
-      rig.rotation.set(0, 0, 0);
-      shadow.visible = true;
+      if (FREE.on && !freeAllowed()) freeExit();
+      if (FREE.on) {
+        freePose(dt);
+      } else {
+        /* Pharmacy: drops out of the sky, walks to the door, opens it, goes in,
+           comes to the counter window, turns to us; mask, clipboard, sits. */
+        const dist = s.dA * lenA + s.dB * lenB;
+        const onB = s.dB > 0;
+        const u = THREE.MathUtils.clamp(onB ? s.dB : s.dA, 0, 1);
+        const P = onB ? curveB.getPointAt(u) : curveA.getPointAt(u);
+        const T = onB ? curveB.getTangentAt(u) : curveA.getTangentAt(u);
+        let yaw = lerpA(0, Math.atan2(T.x, T.z), s.turnA);
+        yaw = lerpA(yaw, 0, s.faceCam);
+        setAct('land', s.tLandH, s.wLandH);
+        setAct('walk', (dist / walkStride * walkDur) % walkDur, s.wWalk);     // feet locked to the distance walked
+        setAct('standToSit', s.tSitH, s.wSitH);
+        setAct('sit', tClock % A.sit.getClip().duration, s.wSitL);
+        setAct('idle', tClock % A.idle.getClip().duration, Math.max(0, 1 - s.wLandH - s.wWalk - s.wSitH - s.wSitL));
+        rig.position.set(P.x, s.gyH, P.z);
+        rig.position.z += s.wSitH * rootAt('standToSit', s.tSitH)[1] + s.wSitL * SIT_BACK + s.recoil;
+        rig.position.y -= 0.05 * s.wSitL;                                  // the sit loop sits a touch higher
+        rig.rotation.set(0, yaw, 0);
+      }
+      const inside = rig.position.z < WALL_Z - 0.1;
+      setFront(inside);
+      shadow.visible = !inside;
       shadow.position.set(rig.position.x, 0.003, rig.position.z);
       // the shadow gathers under him as he comes down
-      const air = s.gyH + Math.max(0, (hipsAt('land', 0) - 1) * s.wLandH * (1 - THREE.MathUtils.smoothstep(s.tLandH, 0, 0.33)));
+      const air = Math.max(0, rig.position.y) + Math.max(0, (hipsAt('land', 0) - 1) * s.wLandH * (1 - THREE.MathUtils.smoothstep(s.tLandH, 0, 0.33)));
       shadow.scale.setScalar(1 + air * 0.5);
       shadow.material.opacity = 0.55 / (1 + air * 1.5);
     } else if (f === 'P') {
@@ -550,16 +564,254 @@ async function boot() {
 
     const snap = f !== lastFrame || dt <= 0 || dt > 0.25;   // new scene / first frame / resumed tab
     lastFrame = f;
-    if (f === 'H') handsHospital(s);
+    if (f === 'H') { if (FREE.on) freeHands(); else handsHospital(s); }
+    if (f !== 'H') setFront(false);
     lookAtPointer(s, dt, f);
     respond(s, dt, f);
     smoothPose(dt, snap);
     avatar.updateMatrixWorld(true);
-    if (f === 'H') placeMask(s);
+    if (f === 'H') { placeMask(s); placeBox(); }
     face.set(blink(tClock), Math.max(s.smile, smileBoost > 0 ? Math.min(1, smileBoost * 2) : 0));
     face.masked(f === 'H' && mask.visible && s.mc > 0.55);
   }
   let lastFrame = null;
+  /* ---------- inside the pharmacy: free play (touch / mouse) ----------
+     Once he's in, between scripted moments, the visitor can tap a shelf (he
+     walks over, reaches up, takes that medicine and shows what it's for) or
+     pick him up and drop him. Everything moves physically: walking speeds up
+     and slows to a stop (feet locked to the floor), turns have a limited rate,
+     a dropped figure falls under gravity and squashes as it lands. */
+  const MEDS = [
+    { name: 'Paracetamol 500 mg', col: 0xe8473c, use: 'Pain and fever.', dose: '500 mg – 1 g every 4–6 hours; no more than 4 g in 24 hours.', tip: 'Many cold and flu products also contain paracetamol: count them in the daily total.' },
+    { name: 'Amoxicillin 500 mg', col: 0x2f7fd8, use: 'Bacterial infections (an antibiotic).', dose: 'Usually 500 mg three times a day, for the course prescribed.', tip: 'Finish the whole course, and tell us about any penicillin allergy.' },
+    { name: 'Metformin 500 mg', col: 0x3aa76d, use: 'Type 2 diabetes.', dose: 'Started at 500 mg with meals and increased gradually by the prescriber.', tip: 'Take it with food to ease stomach upset.' },
+    { name: 'Amlodipine 5 mg', col: 0x8e5cc9, use: 'High blood pressure and angina.', dose: '5 mg once a day (up to 10 mg).', tip: 'Ankle swelling is common; do not stop it suddenly without advice.' },
+    { name: 'Omeprazole 20 mg', col: 0xf0a12b, use: 'Acid reflux, heartburn and stomach ulcers.', dose: '20 mg once a day, before breakfast.', tip: 'Swallow whole, about 30 minutes before food.' },
+    { name: 'Cetirizine 10 mg', col: 0x22a8b5, use: 'Allergies, hay fever and itching.', dose: '10 mg once a day.', tip: 'Can make some people drowsy: take care when driving.' },
+    { name: 'Salbutamol inhaler', col: 0x5a6fd6, use: 'Quick relief of asthma symptoms.', dose: '1–2 puffs when needed.', tip: 'Shake, breathe out, then press and breathe in slowly; hold for 10 seconds.' },
+    { name: 'Erythropoietin (EPO)', col: 0xd94f8a, use: 'Anaemia in kidney disease and dialysis.', dose: 'Injected; the dose depends on body weight and haemoglobin.', tip: 'Keep it in the fridge (2–8 °C) and never freeze it.' },
+  ];
+  const FREE = { on: false, mode: 'idle', t: 0, pos: V3(0, 0, 0), vel: V3(0, 0, 0), yaw: 0, yawT: 0, v: 0, phase: 0,
+    target: null, next: null, reachP: null, med: -1, carryOff: V3(0, 0, 0), handW: 0, hasBox: false, used: false, reachT: 0, tilt: 0, after: null };
+  const BOUND = { x0: WIN.x0, x1: WIN.x1, z0: SHELF_Z + 0.55, z1: WALL_Z - 0.4 };
+  const freeAllowed = () => frame === 'H' && S3D.inside > 0.98 && !(story.busy && story.busy());
+
+  // the medicine box he takes
+  const medBox = new THREE.Group();
+  const medMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+  medBox.add(new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.08, 0.045), medMat));
+  medBox.add(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.03, 0.047), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 })));
+  medBox.visible = false;
+  SC.H.add(medBox);
+
+  // the medicine card ("ask about it")
+  const card = document.createElement('div');
+  card.className = 'medcard';
+  card.setAttribute('role', 'dialog');
+  card.innerHTML = '<button class="medcard-x" aria-label="Put it back">×</button><p class="medcard-k">Pharmacist says</p><h3></h3>'
+    + '<dl><dt>Used for</dt><dd class="m-use"></dd><dt>Usual adult dose</dt><dd class="m-dose"></dd><dt>Tip</dt><dd class="m-tip"></dd></dl>'
+    + '<button class="medcard-back">Put it back</button><p class="medcard-n">General information, not medical advice. Always follow your doctor\'s or pharmacist\'s directions.</p>';
+  document.getElementById('film').appendChild(card);
+  const hint = document.createElement('div');
+  hint.className = 'pharm-hint';
+  hint.textContent = 'Tap a shelf to take a medicine · drag him to pick him up';
+  document.getElementById('film').appendChild(hint);
+  const putBack = () => { if (FREE.on && FREE.mode === 'show') { FREE.mode = 'putback'; FREE.t = 0; } };
+  card.querySelector('.medcard-back').addEventListener('click', putBack);
+  card.querySelector('.medcard-x').addEventListener('click', putBack);
+  function showCard(i) {
+    const m = MEDS[i];
+    card.querySelector('h3').textContent = m.name;
+    card.querySelector('.m-use').textContent = m.use;
+    card.querySelector('.m-dose').textContent = m.dose;
+    card.querySelector('.m-tip').textContent = m.tip;
+    card.style.setProperty('--med', '#' + m.col.toString(16).padStart(6, '0'));
+    card.classList.add('on');
+  }
+  const hideCard = () => card.classList.remove('on');
+
+  function freeEnter() {
+    if (FREE.on) return;
+    FREE.on = true; FREE.used = true;
+    FREE.pos.copy(rig.position); FREE.pos.y = Math.max(0, FREE.pos.y);
+    FREE.yaw = FREE.yawT = rig.rotation.y;
+    FREE.vel.set(0, 0, 0); FREE.v = 0; FREE.t = 0; FREE.after = null;
+    FREE.mode = S3D.wSitH + S3D.wSitL > 0.5 ? 'stand' : 'idle';
+    if (FREE.mode === 'stand') FREE.pos.y = 0;
+    jumpBlend = 1;                                   // blend out of the scripted pose
+  }
+  function freeExit() {
+    FREE.on = false; FREE.hasBox = false; medBox.visible = false; hideCard();
+    jumpBlend = 1;
+  }
+  function freeGoTo(x, z, next) {
+    FREE.target = V3(THREE.MathUtils.clamp(x, BOUND.x0, BOUND.x1), 0, THREE.MathUtils.clamp(z, BOUND.z0, BOUND.z1));
+    FREE.next = next; FREE.mode = 'walk'; FREE.t = 0;
+  }
+  // a point on screen → a point on the plane z = const, in the scene
+  const _rc = new THREE.Raycaster(), _nd2 = new THREE.Vector2(), _plz = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+  function onPlaneZ(cx, cy, z) {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width) return null;
+    _nd2.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+    _rc.setFromCamera(_nd2, camH);
+    _plz.constant = -z;
+    const out = new THREE.Vector3();
+    return _rc.ray.intersectPlane(_plz, out) ? out : null;
+  }
+  // a tap on the shelves: walk there, reach up, take the medicine kept there
+  function shelfTap(cx, cy) {
+    if (!freeAllowed() && !FREE.on) return false;
+    const p = onPlaneZ(cx, cy, SHELF_Z);
+    if (!p || p.x < WIN.x0 - 0.3 || p.x > WIN.x1 + 0.3 || p.y < 0.9 || p.y > 2.5) return false;
+    freeEnter();
+    if (FREE.mode === 'carried' || FREE.mode === 'fall') return true;
+    hideCard(); FREE.hasBox = false; medBox.visible = false;
+    const col = THREE.MathUtils.clamp(Math.floor((p.x - WIN.x0) / (WIN.x1 - WIN.x0) * 4), 0, 3);
+    FREE.med = col + (p.y < 1.65 ? 4 : 0);
+    FREE.reachP = V3(THREE.MathUtils.clamp(p.x, BOUND.x0, BOUND.x1), THREE.MathUtils.clamp(p.y, 1.15, 2.0), SHELF_Z + 0.05);
+    const go = () => freeGoTo(p.x, SHELF_Z + 0.62, 'reach');
+    if (FREE.mode === 'stand') FREE.after = go; else go();
+    return true;
+  }
+
+  const ssF = THREE.MathUtils.smoothstep;
+  // the Landing clip's early frames are a mid-air pose, but its hips carry the
+  // clip's own drop height; this removes it so the pose can hang from a hand
+  const LAND_AIR_T = 0.2;
+  const AIR_DROP = (() => {
+    const tr = moves.clips.land.tracks.find((t) => t.n === 'Hips.position');
+    let i = tr.t.findIndex((x) => x >= LAND_AIR_T); if (i < 0) i = tr.t.length - 1;
+    return tr.v[i * 3 + 1] - hipsAt('idle', 0);
+  })();
+  function freePose(dt) {
+    const F = FREE; F.t += dt;
+    let wWalk = 0, wIdle = 1;
+    const yawStep = (rate = 7, max = 5) => { const d = wrapA(F.yawT - F.yaw); F.yaw += THREE.MathUtils.clamp(d * (1 - Math.exp(-dt * rate)), -max * dt, max * dt); return Math.abs(d); };
+    const P = F.pos.clone();
+    switch (F.mode) {
+      case 'stand': {                                    // seated → standing (Stand Up clip, carries him forward)
+        const tt = Math.min(2.3, 0.6 + F.t * 1.2);
+        setAct('standUp', tt, 1); wIdle = 0;
+        P.z += rootAt('standUp', tt)[1];
+        P.y = -0.2 * (1 - ssF(tt, 1.0, 2.0));            // Stand Up starts from a taller chair
+        if (tt >= 2.3) { F.pos.z = P.z; F.pos.y = 0; F.mode = 'idle'; F.yawT = 0; if (F.after) { const go = F.after; F.after = null; go(); } }
+        break;
+      }
+      case 'walk': {
+        const to = F.target, dx = to.x - F.pos.x, dz = to.z - F.pos.z, dist = Math.hypot(dx, dz);
+        if (dist > 0.03) F.yawT = Math.atan2(dx, dz);
+        const err = yawStep(8, 5.5);
+        // speed: accelerate at 1.6 m/s², brake so he stops exactly on the spot, slow while turning
+        const vmax = Math.min(1.1, Math.sqrt(2 * 1.8 * Math.max(0, dist - 0.01))) * (err > 0.9 ? 0.12 : 1 - err * 0.55);
+        F.v += THREE.MathUtils.clamp(vmax - F.v, -2.6 * dt, 1.6 * dt);
+        const step = Math.min(Math.max(0, F.v) * dt, dist);
+        F.pos.x += Math.sin(F.yaw) * step; F.pos.z += Math.cos(F.yaw) * step;
+        F.pos.x = THREE.MathUtils.clamp(F.pos.x, BOUND.x0, BOUND.x1); F.pos.z = THREE.MathUtils.clamp(F.pos.z, BOUND.z0, BOUND.z1);
+        F.phase += step / walkStride * walkDur;
+        wWalk = ssF(F.v, 0.03, 0.4); wIdle = 1 - wWalk;
+        if (dist < 0.05 && F.v < 0.15) {
+          F.v = 0;
+          if (F.next === 'reach') { F.mode = 'reach'; F.t = 0; F.yawT = Math.PI; } else { F.mode = 'idle'; F.yawT = 0; }
+        }
+        P.copy(F.pos);
+        break;
+      }
+      case 'reach': case 'putback': {                    // faces the shelf, reaches up, then turns back to us
+        const back = F.mode === 'putback';
+        F.yawT = F.t > 1.75 ? 0 : Math.PI;
+        yawStep(7, 4.5);
+        F.reachT = F.t > 0.45 ? F.t - 0.45 : 0;
+        if (!back && F.reachT > 0.6 && !F.hasBox) { F.hasBox = true; medMat.color.setHex(MEDS[F.med].col); }
+        if (back && F.reachT > 0.6 && F.hasBox) F.hasBox = false;
+        if (F.t > 2.4) { F.mode = back ? 'idle' : 'show'; F.t = 0; F.yawT = 0; if (!back) showCard(F.med); else hideCard(); }
+        P.copy(F.pos);
+        break;
+      }
+      case 'carried': {                                  // follows the finger on a spring: he lags and swings
+        const p = grab.on ? onPlaneZ(grab.x, grab.y, F.pos.z) : null;
+        if (p) {
+          const tx = THREE.MathUtils.clamp(p.x - F.carryOff.x, BOUND.x0, BOUND.x1);
+          const ty = THREE.MathUtils.clamp(p.y - F.carryOff.y, 0, 0.45);
+          const k = 140, c = 2 * 0.5 * Math.sqrt(k);
+          F.vel.x += (k * (tx - F.pos.x) - c * F.vel.x) * dt;
+          F.vel.y += (k * (ty - F.pos.y) - c * F.vel.y) * dt;
+          F.pos.x += F.vel.x * dt; F.pos.y += F.vel.y * dt;
+        }
+        setAct('land', LAND_AIR_T, 1); wIdle = 0;        // legs dangling
+        P.copy(F.pos); P.y -= AIR_DROP;
+        break;
+      }
+      case 'fall': {                                     // gravity, a little air drag, walls bounce
+        F.vel.y -= 9.81 * dt;
+        F.vel.x *= Math.exp(-dt * 0.4);
+        F.pos.addScaledVector(F.vel, dt);
+        if (F.pos.x < BOUND.x0) { F.pos.x = BOUND.x0; F.vel.x *= -0.35; }
+        if (F.pos.x > BOUND.x1) { F.pos.x = BOUND.x1; F.vel.x *= -0.35; }
+        if (F.pos.y <= 0 && F.vel.y < 0) {
+          SP.sq.v -= Math.min(3.5, -F.vel.y * 0.9);       // squash on impact
+          F.pos.y = 0; F.vel.set(0, 0, 0); F.mode = 'land'; F.t = 0;
+        }
+        setAct('land', LAND_AIR_T, 1); wIdle = 0;
+        P.copy(F.pos); P.y -= AIR_DROP;
+        break;
+      }
+      case 'land': {                                     // knees take the impact, he rises
+        const tt = 0.36 + F.t * 1.15;
+        const w = 1 - ssF(tt, 1.25, 1.5);
+        setAct('land', Math.min(tt, 1.5), w); wIdle = 1 - w;
+        if (tt >= 1.5) { F.mode = 'idle'; F.yawT = 0; }
+        P.copy(F.pos);
+        break;
+      }
+      default:                                           // idle / show: stand, face us
+        yawStep(5, 3.5);
+        P.copy(F.pos);
+    }
+    setAct('walk', F.phase % walkDur, wWalk);
+    setAct('idle', tClock % A.idle.getClip().duration, wIdle);
+    rig.position.copy(P);
+    const tilt = F.mode === 'carried' ? THREE.MathUtils.clamp(-F.vel.x * 0.07, -0.45, 0.45) : 0;
+    F.tilt += (tilt - F.tilt) * (1 - Math.exp(-dt * 10));
+    rig.rotation.set(0, F.yaw, F.tilt);
+  }
+  // hands (after the clips): reach for the shelf, hold the box at his chest
+  function freeHands() {
+    const F = FREE;
+    const reaching = (F.mode === 'reach' || F.mode === 'putback') && F.reachT > 0;
+    let k = 0, target = null;
+    const chest = offsetFrom(B.spine2, -0.07, -0.08, 0.26);
+    if (reaching) {
+      const r = F.reachT;
+      const up = ssF(r, 0, 0.6) * (1 - ssF(r, 0.7, 1.25));      // up to the shelf and back
+      target = lerpV(chest, F.reachP, up);
+      k = ssF(r, 0, 0.25) * (F.mode === 'putback' ? 1 - ssF(r, 1.1, 1.4) : 1);
+    } else if (F.hasBox) { target = chest; k = 1; }
+    F.handW = k;
+    if (target && k > 0.001) {
+      ik(B.rArm, B.rFore, B.rHand, target, offsetFrom(B.rArm, -0.5, -0.7, 0.05), k);
+      aimHand(B.rHand, B.rMid, new THREE.Vector3(0, 1, 0.2).applyQuaternion(rig.quaternion).normalize(), k * 0.6);
+    }
+  }
+  // the box rides in his (smoothed) fingers
+  function placeBox() {
+    medBox.visible = FREE.on && FREE.hasBox;
+    if (medBox.visible) {
+      const wr = B.rHand.getWorldPosition(new THREE.Vector3()), kn = B.rMid.getWorldPosition(new THREE.Vector3());
+      medBox.position.copy(wr.lerp(kn, 1.2));
+      medBox.quaternion.copy(rig.getWorldQuaternion(new THREE.Quaternion()));
+    }
+    // the hint shows while he's inside and nobody has played yet
+    hint.classList.toggle('on', !FREE.used && freeAllowed());
+  }
+
+  let frontOn = null;
+  function setFront(on) {
+    if (!el.front) return;
+    const v = on && frame === 'H';
+    if (v === frontOn) return;
+    frontOn = v; el.front.style.opacity = v ? '1' : '0';
+  }
   let lastActT = null, jumpBlend = 0;
   const prevRigP = new THREE.Vector3(), prevRigQ = new THREE.Quaternion();
 
@@ -583,15 +835,18 @@ async function boot() {
   const film = document.getElementById('film');
   // Press on him: grab (he leans and stretches toward the pull, wobbles back on
   // release, bounces on a tap). Press anywhere else: drag sideways to spin him.
-  const grab = { on: false, id: null, x0: 0, y0: 0, x: 0, y: 0, t0: 0 };
+  const grab = { on: false, id: null, x0: 0, y0: 0, x: 0, y: 0, t0: 0, free: false };
+  const tap = { on: false, id: null, x: 0, y: 0, t: 0 };
   film.addEventListener('pointerdown', (e) => {
     if (RM || e.button > 0 || e.target.closest('a, button')) return;
     ptr.x = e.clientX; ptr.y = e.clientY; ptr.t = now();
     if (hitsHim(e.clientX, e.clientY)) {
-      Object.assign(grab, { on: true, id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: now() });
+      Object.assign(grab, { on: true, id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: now(), free: freeAllowed() || FREE.on });
       document.documentElement.classList.add('grabbing');
       return;
     }
+    // inside the pharmacy: a tap on the shelves (decided on release), no spinning
+    if (frame === 'H' && S3D.inside > 0.5) { Object.assign(tap, { on: true, id: e.pointerId, x: e.clientX, y: e.clientY, t: now() }); return; }
     Object.assign(spin, { drag: true, id: e.pointerId, lastX: e.clientX, lastT: now(), v: 0, target: spin.a });
     document.documentElement.classList.add('spinning');
   });
@@ -600,13 +855,26 @@ async function boot() {
     const t = e.touches[0];
     if (!RM && t && e.touches.length === 1 && !e.target.closest('a, button') && hitsHim(t.clientX, t.clientY)) e.preventDefault();
   }, { passive: false });
-  addEventListener('pointermove', (e) => { if (grab.on && e.pointerId === grab.id) { grab.x = e.clientX; grab.y = e.clientY; } }, { passive: true });
+  addEventListener('pointermove', (e) => {
+    if (tap.on && e.pointerId === tap.id && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 10) tap.on = false;
+    if (!grab.on || e.pointerId !== grab.id) return;
+    grab.x = e.clientX; grab.y = e.clientY;
+    // inside the pharmacy, dragging him picks him up
+    if (grab.free && FREE.mode !== 'carried' && Math.hypot(grab.x - grab.x0, grab.y - grab.y0) > 6) {
+      freeEnter();
+      const p = onPlaneZ(grab.x0, grab.y0, FREE.pos.z);
+      FREE.carryOff.copy(p ? p.sub(FREE.pos) : V3(0, 1.2, 0));
+      FREE.mode = 'carried'; FREE.vel.set(0, 0, 0); FREE.hasBox = false; FREE.after = null; hideCard();
+    }
+  }, { passive: true });
   const endDrag = (e) => {
+    if (tap.on && e && e.pointerId === tap.id) { tap.on = false; if (e.type === 'pointerup' && now() - tap.t < 0.5) shelfTap(e.clientX, e.clientY); }
     if (grab.on && (!e || e.pointerId === grab.id)) {
       grab.on = false;
       document.documentElement.classList.remove('grabbing');
+      if (FREE.on && FREE.mode === 'carried') { FREE.mode = 'fall'; FREE.t = 0; }   // let go: he drops
       // a quick tap: he bounces like jelly
-      if (now() - grab.t0 < 0.3 && Math.hypot(grab.x - grab.x0, grab.y - grab.y0) < 8) poke();
+      else if (now() - grab.t0 < 0.3 && Math.hypot(grab.x - grab.x0, grab.y - grab.y0) < 8) poke();
     }
     if (!spin.drag || (e && e.pointerId !== spin.id)) return;
     spin.drag = false; spin.released = now();
@@ -676,6 +944,7 @@ async function boot() {
     B.head.getWorldPosition(_h0); _h0.y += 0.12;
     B.hips.getWorldPosition(_h1);
     _h2.copy(_h1); _h2.y = rig.position.y + 0.05;
+    if (frame === 'H' && rig.position.z < WALL_Z) _h2.y = Math.max(_h2.y, 1.0);   // inside: the counter hides his legs
     const a = toPx(_h0), b = toPx(_h2), m = toPx(_h1);
     const side = toPx(_h1.clone().add(new THREE.Vector3(0.24, 0, 0)));
     const r = Math.hypot(side[0] - m[0], side[1] - m[1]);
@@ -690,7 +959,7 @@ async function boot() {
     if (RM) return;
     const cam = f === 'H' ? camH : f === 'D' ? camD : camP;
     // grab: the pull, in screen px, leans and stretches him toward the pointer
-    if (grab.on) {
+    if (grab.on && !FREE.on) {
       const dx = grab.x - grab.x0, dy = grab.y - grab.y0;
       target.lean = THREE.MathUtils.clamp(dx / 160, -1, 1) * 0.34;
       target.sq = THREE.MathUtils.clamp(-dy / 260, -1, 1) * 0.12;
@@ -874,7 +1143,7 @@ async function boot() {
 
     // clipboard: tossed in from the right, caught, held against his chest
     if (s.cw > 0) {
-      const start = MARK.clone().add(new THREE.Vector3(-2.6, 1.9, 0.6));
+      const start = MARK.clone().add(new THREE.Vector3(-2.2, 1.7, -0.5));   // tossed from inside, past the post
       const catchP = offsetFrom(B.spine2, -0.34, 0.05, 0.35);
       const chest = offsetFrom(B.spine2, -0.1, -0.06, 0.2);
       let p;
@@ -953,7 +1222,7 @@ async function boot() {
   renderer.setAnimationLoop(loop);          // paced by the display, same tick as GSAP
 
   document.documentElement.classList.add('has-3d');
-  window.__hero3d = { WALK_K, face, renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B, rig,
+  window.__hero3d = { FREE, face, renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B, rig,
     // for tooling (motion analysis): advance the pose by dt without the render loop
     step: (dt) => { tClock += dt; pose(dt); }, stop: () => renderer.setAnimationLoop(null) };
 }

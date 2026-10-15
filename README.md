@@ -50,9 +50,9 @@ There are two timelines in `script.js`:
 | Scroll beat | Scene | What he does (3D) |
 | --- | --- | --- |
 | 0 | Intro | the page opens on "I am Nisham Sajjad," alone (typed in word by word); at the first scroll he drops out of the sky, lands in a deep knee bend, rises and smiles; the 8-years line follows |
-| 1.75 | Mission Hospital | turns and walks toward the hospital, turns back and walks onto his mark |
+| 1.75 | Pharmacy (Thalassery Mission Hospital) | walks across the floor to the pharmacy door, reaches for the handle and pushes it open, walks in, and reappears behind the counter window, turning to us |
 | 3.7 | COVID | puts the mask on two-handed, as a person really does: holds it by both loops at his waist, lifts it to his face, hooks both loops over his ears, pinches the nose bridge, pulls it under his chin, lowers his hands |
-| 5.1 | NABH | a clipboard is tossed in on an arc; he reaches, catches it and holds it to his chest; "(NABH)" appears on the sign letter by letter |
+| 5.1 | NABH | a clipboard is tossed in on an arc; he catches it, holds it to his chest and sits down inside with it; "(NABH)" appears above the sign letter by letter |
 | 7.1 | Maldives | plane flies in; he pilots with one hand and waves with the other |
 | 8.95 | NURF Pharmacy, IGMH | crouches, leaps out of the cockpit (the plane flies on), drops in as IGMH rises and lands on his feet, sits back into his chair (it rocks under him), starts typing |
 | 11.6 | Responsibilities | he works at his laptop (typing in natural bursts) and swivels with the chair, right through to the end; the seven duties appear one by one and stay until the Connect page |
@@ -94,6 +94,19 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
   - Phones skip the costly blur-to-sharp text effect.
 - **Changing the look:** edit `assets/js/cartoon.js` (the `COL` colours, the coat profile, the head size `HEAD_K`). To use a rigged 3D model from another tool instead, it needs a Mixamo-style humanoid skeleton.
 - **Final round photo:** `tools/make_avatar.py` crops `tools/source/photo.webp` (cyan backdrop kept) into `assets/img/avatar.webp`.
+
+## The pharmacy scene
+
+The hospital scene is the Thalassery Mission Hospital pharmacy photo (`tools/source/pharmacy-photo.jpg`), built by `tools/make_pharmacy.py` into three layers on the 941×1672 canvas:
+
+- `pharmacy.webp`: the photo with the staff removed (LaMa inpainting), the wall extended and fading to dark at the top so the story text stays readable, and a perspective tile floor drawn with the same camera the 3D figure uses (eye 1.57 m, wall 6 m away, calibrated from the 1 m counter). The doorway shows a dim corridor.
+- `pharmacy-door.webp`: the door leaf. It swings open in CSS (`rotationY`, hinged on its left edge) as he pushes it.
+- `pharmacy-front.webp`: the same wall with the window glass and doorway cut out. `hero3d.js` shows it only while he's inside, so the counter hides his legs and the steel posts pass in front of him.
+
+**Playing inside:** once he's at the window, between scripted moments, visitors can:
+- **tap a shelf:** he walks over (accelerating, braking to a stop, turning at a limited rate, feet locked to the floor), turns, reaches up, takes the medicine kept there and turns back to show a card: what it's used for, the usual adult dose and a pharmacist's tip. There are eight medicines (paracetamol, amoxicillin, metformin, amlodipine, omeprazole, cetirizine, salbutamol, EPO); edit `MEDS` in `hero3d.js`. "Put it back" returns it to the shelf.
+- **drag him:** he's picked up and hangs from the pointer on a spring, swinging as you move. Let go and he falls under gravity (with a little air drag; the walls bounce him back), squashes on impact and gets up.
+- If he was sitting, he stands up first. Scrolling to the next moment hands him back to the story with a short blend.
 
 ## Artwork
 

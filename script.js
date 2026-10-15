@@ -67,7 +67,7 @@
       h = vh;
       w = h * RATIO;
       if (w < vw) { w = vw; h = w / RATIO; }
-      G.A = { x: Math.min(0, vw - w), y: vh - h };
+      G.A = { x: Math.min(0, (vw - w) / 2), y: vh - h };   // centred on the pharmacy (door to window)
       G.B = { x: (vw - w) / 2, y: vh - h };
       G.B2 = { x: G.B.x, y: G.B.y - vh * 0.15 };
     }
@@ -99,6 +99,8 @@
   const maskf = $$('.maskf');           // puts the mask on by hand, 4 frames
   const clip = $('.ch-clip');
   const files = $('.files');
+  const pharmDoor = $('.pharm-door');
+  const DOOR_SWING = 68;                 // degrees the door swings in (CSS rotationY)
 
   const cam = $('.cam');
   const chair = $('.chair');
@@ -135,7 +137,7 @@
   gsap.set(lines(mald), { y: 60 * M });
   gsap.set($$('.rule'), { scaleX: 0 });
 
-  gsap.set([bgHosp, portraitWrap, ambA, ambB, fx, shade], { opacity: 0 });
+  gsap.set([bgHosp, pharmDoor, portraitWrap, ambA, ambB, fx, shade], { opacity: 0 });
   gsap.set(word, { clipPath: 'inset(0% 100% 0% 0%)' });
   gsap.set(portraitWrap, { xPercent: 25 * M, scale: 1 + 0.08 * M, transformOrigin: '86% 57%' });
   gsap.set(portrait, { transformOrigin: '86% 57%' });                       // face centre
@@ -177,6 +179,8 @@
   gsap.set(setA, { transformOrigin: '75% 60%' });
   gsap.set(cam, { yPercent: 100 });                                        // IGMH waits below
   gsap.set([chair, sitterRig], { transformOrigin: '50% 59%', transformPerspective: 900 });
+  // the pharmacy door hinges on its left edge (canvas x 92) and swings inward
+  if (pharmDoor) gsap.set(pharmDoor, { transformOrigin: '9.78% 70%', transformPerspective: 1400 });
   gsap.set(sitterRig, { opacity: 0 });
   gsap.set(sitter, { '--sf': RM ? '0%' : '9%' });
   gsap.set(pilot, { transformOrigin: '33% 100%' });
@@ -261,7 +265,7 @@
     act.to(hero, { y: 4, duration: 0.12, yoyo: true, repeat: 1, ease: 'sine.inOut' }, stop);              // settles
     act.to(legL, { rotation: -3, duration: 0.2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, stop + 0.3); // shifts his stance
   }
-  act.addLabel('hosp', Math.max(act.duration() + 0.15, 8.1));
+  act.addLabel('hosp', Math.max(act.duration() + 0.15, 8.5));
 
   /* --- S4 · takes the mask out of his pocket and puts it on (drawn frames) --- */
   const poses = [poseStand, ...maskf];
@@ -287,7 +291,7 @@
   act.to(hero, { xPercent: 0, rotation: 0, duration: 0.3, ease: 'power2.out' }, 'mask+=0.81');
   act.to(clip, { opacity: 1, duration: 0.15 }, 'mask+=0.74');
   act.set([maskf[3], files], { opacity: 0 }, 'mask+=0.9');
-  act.addLabel('files', 'mask+=1.5');
+  act.addLabel('files', 'mask+=3.9');   // (the 3D figure sits down inside with the files)
 
   /* --- S7 · jumps out of the plane and falls into his chair --- */
   const J = 'files';
@@ -334,34 +338,35 @@
      numbers in S3D; the module turns them into his pose every frame.
      Timings: turn-and-walk clip 2.7 s (1.5 m), walk 1.44 m/s.
      --------------------------------------------------------- */
-  // The walk loop starts at the phase whose legs match the end of the turn
-  // (found by comparing leg rotations), so the hand-over doesn't skip a step.
-  const WA_PHASE = 0.813;
-  // seconds of walking toward the hospital: one cycle shorter than before, so the
-  // legs hand over to the turn at the same phase (hero3d.js fine-tunes the stride)
-  const WALK_T = 1.79;
   const S3D = {
     tLandH: 0, wLandH: 1, gyH: 1.8,                                                   // intro: falls from the sky
-    wIdle: 0, tTW: 0, wTW: 0, tWA: WA_PHASE, waStart: WA_PHASE + 0.25, waEnd: WA_PHASE + WALK_T,   // hospital walk
-    wWA: 0, tTB: 0, wTB: 0, drift: 0, recoil: 0,
+    wIdle: 0, turnA: 0, dA: 0, dB: 0, wWalk: 0, faceCam: 0, inside: 0,               // walk into the pharmacy
+    wDoor: 0, door: 0,                                                                 // opens the door
+    recoil: 0,
+    tSitH: 0, wSitH: 0, wSitL: 0,                                                      // sits down inside
     mp: 0, wR: 0, wL: 0, ms: 0, mc: 0,                                               // mask
     cp: 0, cw: 0, wC: 0,                                                               // clipboard
     tJ: 0.55, wJ: 0, gyP: 0,                                                           // jump from the plane
     tLand: 0, wLand: 1, gyD: 1.4, tSTS: 0, wSTS: 0, wType: 0, bump: 0,                 // land, sit, type
-    smile: 0,                                                                          // face (see face.js)
+    smile: 0,                                                                          // face
   };
   const x3 = (vars, at) => act.to(S3D, { ease: 'none', ...vars }, at);
-  // S3 · turns and walks away, stops, turns back, walks onto his mark
-  // (eased blends between moves; the walk is counted as travel from 2.7 s,
-  //  when the turn clip's own travel ends)
-  x3({ wIdle: 0, wTW: 1, duration: 0.5, ease: 'sine.inOut' }, 0);
-  x3({ tTW: 2.7, duration: 2.7 }, 0);
-  x3({ wTW: 0, wWA: 1, duration: 0.25, ease: 'sine.inOut' }, 2.45);
-  x3({ tWA: WA_PHASE + WALK_T, duration: WALK_T }, 2.45);
-  x3({ drift: 1, duration: WALK_T, ease: 'sine.inOut' }, 2.45);
-  x3({ wWA: 0, wTB: 1, duration: 0.45, ease: 'sine.inOut' }, 2.45 + WALK_T - 0.27);
-  x3({ tTB: 2.7, duration: 2.7 }, 2.45 + WALK_T - 0.27);
-  x3({ wTB: 0, wIdle: 1, duration: 0.6, ease: 'sine.inOut' }, 2.45 + WALK_T + 2.13);
+  // S3 · walks over to the pharmacy, opens the door, goes in and comes to the
+  // counter window (path and door geometry in hero3d.js; dA/dB are the
+  // fractions of the two path legs, eased so he speeds up and slows down)
+  x3({ turnA: 1, duration: 0.6, ease: 'sine.inOut' }, 0);                    // turns toward the door
+  x3({ wWalk: 1, duration: 0.45, ease: 'sine.inOut' }, 0.15);
+  x3({ dA: 1, duration: 3.6, ease: 'power1.inOut' }, 0.2);                   // walks to the door
+  x3({ wWalk: 0, duration: 0.4, ease: 'sine.inOut' }, 3.45);
+  x3({ wDoor: 1, duration: 0.5, ease: 'sine.inOut' }, 3.7);                  // hand to the handle
+  x3({ door: 1, duration: 1.1, ease: 'power2.inOut' }, 4.1);                 // pushes it open
+  act.to(pharmDoor, { rotationY: () => DOOR_SWING, duration: 1.1, ease: 'power2.inOut' }, 4.1);
+  x3({ wDoor: 0, duration: 0.45, ease: 'sine.inOut' }, 4.95);
+  x3({ wWalk: 1, duration: 0.4, ease: 'sine.inOut' }, 4.75);
+  x3({ dB: 1, duration: 3.1, ease: 'power1.inOut' }, 4.8);                   // through the door, behind the counter
+  act.set(S3D, { inside: 1 }, 7.9);
+  x3({ wWalk: 0, duration: 0.45, ease: 'sine.inOut' }, 7.6);
+  x3({ faceCam: 1, duration: 0.6, ease: 'sine.inOut' }, 7.75);               // turns to us at the window
   // S4 · mask: hand to pocket, mask out, up to his face, loops over the ears, hands down
   // Two-handed, as in a real mask-on (mp = position along both hands' mirrored
   // path: 0 rest · 1 waist · 2 chest · 3 face · 4 ears · 5 nose · 6 chin · 7 rest).
@@ -383,6 +388,10 @@
   x3({ recoil: -0.025, duration: 0.12, ease: 'sine.out' }, 'mask+=0.74');   // a soft give as he catches it
   x3({ recoil: 0, duration: 0.4, ease: 'sine.inOut' }, 'mask+=0.86');
   x3({ cp: 2, duration: 0.5, ease: 'power2.inOut' }, 'mask+=0.8');
+  // …and sits down inside with the files
+  x3({ wSitH: 1, duration: 0.35, ease: 'sine.inOut' }, 'mask+=1.35');
+  x3({ tSitH: 2.23, duration: 2.23 }, 'mask+=1.35');
+  x3({ wSitH: 0, wSitL: 1, duration: 0.4, ease: 'sine.inOut' }, 'mask+=3.4');
   // S7 · crouch in the cockpit, leap out of frame; fall from above into his chair
   // crouch and launch: the jump clip eases into motion, then plays at one
   // steady pace (1.2×; the clip's slow wind-up is skipped) — no change of speed mid-move, so no hitch
@@ -403,8 +412,8 @@
 
   /* Face (face.js): a gentle smile when he faces us, neutral while he walks and works */
   const face = (vars, at, duration = 0.5) => x3({ ...vars, duration, ease: 'sine.inOut' }, at);
-  face({ smile: 0 }, 0.3, 0.6);                                        // sets off toward the hospital
-  face({ smile: 0.45 }, 2.45 + WALK_T + 2.2);                          // turns back to us on his mark
+  face({ smile: 0 }, 0.3, 0.6);                                        // sets off toward the pharmacy
+  face({ smile: 0.45 }, 7.8);                                          // turns to us at the counter
   face({ smile: 0 }, 'hosp', 0.3);
   face({ smile: 0.35 }, 'files+=4.2', 0.6);                            // at the keyboard
 
@@ -491,8 +500,7 @@
 
   /* S3 · Mission Hospital */
   tl.to(intro, { opacity: 0, y: -40 * M, duration: 0.4, ease: 'power2.in' }, 1.7);
-  tl.fromTo(bgHosp, { scale: 1 + 0.1 * M }, { scale: 1, duration: 1.1 }, 1.9);
-  tl.to(bgHosp, { opacity: 1, duration: 0.9 }, 1.9);
+  tl.to([bgHosp, pharmDoor], { opacity: 1, duration: 0.9 }, 1.9);
   tl.to([fx, ambA, shade], { opacity: 1, duration: 0.8 }, 1.9);
   reveal(lines($('.h', journey)), 3.0);
 
@@ -579,8 +587,9 @@
   // hand the timelines to the 3D avatar module (assets/js/hero3d.js)
   window.__story = {
     S3D, tl, act, G,
+    busy: () => !!(playing && playing.isActive()),   // is the acting playing a scripted moment?
     version: document.documentElement.dataset.v || '',
-    el: { hostH: $('.host-h'), hostP: $('.host-p'), hostD: $('.host-d'), portraitWrap, chair },
+    el: { front: $('.pharm-front'), door: pharmDoor, hostH: $('.host-h'), hostP: $('.host-p'), hostD: $('.host-d'), portraitWrap, chair },
   };
 
   // re-measure the acting's position-based moves after a resize
