@@ -333,8 +333,8 @@
   act.to(rock, { v: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)', onUpdate: rockChair }, `${J}+=${L + 0.07}`);
   act.to(sitterRig, { rotation: -1.4 * M, duration: 0.3, ease: 'sine.out' }, `${J}+=${L + 0.4}`);        // leans back
   act.to(sitterRig, { rotation: 0, duration: 0.5, ease: 'sine.inOut' }, `${J}+=${L + 0.7}`);
-  act.addLabel('crash', `${J}+=1.38`);   // his feet go through the ceiling
-  act.addLabel('desk', `${J}+=10.6`);   // crash in, walk into the pharmacy, sit and start working
+  act.addLabel('crash', `${J}+=1.33`);   // his feet go through the ceiling
+  act.addLabel('desk', `${J}+=11.6`);   // crash in, walk into the pharmacy, sit and start working
 
   /* ---------------------------------------------------------
      3D acting (assets/js/hero3d.js renders it). These tweens only move
@@ -405,31 +405,30 @@
   x3({ tJ: 0.703, duration: 0.2, ease: 'sine.in' }, 'files');
   x3({ tJ: 1.363, duration: 0.55 }, 'files+=0.2');
   x3({ gyP: 4.2, duration: 0.45, ease: 'power2.in' }, 'files+=0.3');
-  // drops in from above (the Landing clip's own fall), lands on his feet in front of the chair…
-  // falls from the plane through the Oncology department's ceiling (the
+  // falls from the plane through the ceiling inside the Oncology Department (the
   // 'crash' label: hole, falling debris, dust; see hero3d.js), lands on his feet
   x3({ gyD: 0, duration: 0.85, ease: 'power2.in' }, 'files+=0.85');       // gravity all the way down
   x3({ tLand: 0.33, duration: 0.85, ease: 'power1.in' }, 'files+=0.85');  // the clip's own drop, matched
   x3({ tLand: 2.1, duration: 1.8 }, 'files+=1.7');                         // impact, knees bend, rises
-  // …walks in through the department doorway, behind the pillar, into the
+  // …walks out through the department's open door, behind the pillar, into the
   // pharmacy, comes to the counter and sits down at it to work
-  x3({ turnD: 1, duration: 0.55, ease: 'sine.inOut' }, 'files+=3.2');
-  x3({ wLand: 0, wWalkD: 1, duration: 0.45, ease: 'sine.inOut' }, 'files+=3.25');
-  x3({ dW: 1, duration: 4.4, ease: 'power1.inOut' }, 'files+=3.35');
-  x3({ wWalkD: 0, duration: 0.45, ease: 'sine.inOut' }, 'files+=7.4');
-  x3({ faceD: 1, duration: 0.6, ease: 'sine.inOut' }, 'files+=7.5');
-  x3({ wSTS: 1, duration: 0.35, ease: 'sine.inOut' }, 'files+=7.95');
-  x3({ tSTS: 2.23, duration: 2.23 }, 'files+=7.95');
-  x3({ bump: 1, duration: 0.08, ease: 'power1.out' }, 'files+=9.37');
-  x3({ bump: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)' }, 'files+=9.45');
-  x3({ wSTS: 0, wType: 1, duration: 0.5, ease: 'sine.inOut' }, 'files+=9.95');
+  x3({ turnD: 1, duration: 0.6, ease: 'sine.inOut' }, 'files+=2.9');
+  x3({ wLand: 0, wWalkD: 1, duration: 0.5, ease: 'sine.inOut' }, 'files+=2.85');
+  x3({ dW: 1, duration: 5.85, ease: 'none' }, 'files+=2.95');                // paced in hero3d.js (paceD)
+  x3({ wWalkD: 0, duration: 0.5, ease: 'sine.inOut' }, 'files+=8.4');
+  x3({ faceD: 1, duration: 0.6, ease: 'sine.inOut' }, 'files+=8.5');
+  x3({ wSTS: 1, duration: 0.35, ease: 'sine.inOut' }, 'files+=8.95');
+  x3({ tSTS: 2.23, duration: 2.23 }, 'files+=8.95');
+  x3({ bump: 1, duration: 0.08, ease: 'power1.out' }, 'files+=10.37');
+  x3({ bump: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)' }, 'files+=10.45');
+  x3({ wSTS: 0, wType: 1, duration: 0.5, ease: 'sine.inOut' }, 'files+=10.95');
 
   /* Face (face.js): a gentle smile when he faces us, neutral while he walks and works */
   const face = (vars, at, duration = 0.5) => x3({ ...vars, duration, ease: 'sine.inOut' }, at);
   face({ smile: 0 }, 0.3, 0.6);                                        // sets off toward the pharmacy
   face({ smile: 0.45 }, 7.8);                                          // turns to us at the counter
   face({ smile: 0 }, 'hosp', 0.3);
-  face({ smile: 0.35 }, 'files+=9.95', 0.6);                            // at the keyboard
+  face({ smile: 0.35 }, 'files+=10.95', 0.6);                            // at the keyboard
 
   /* --- S1 · the opening: he falls out of the sky and lands in front of us --- */
   // Everything above moves later by INTRO; the fall plays when scrolling starts (CUES).
