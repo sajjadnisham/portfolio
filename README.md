@@ -82,7 +82,9 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
   - When a fast scroll jumps his acting ahead, his pose and position blend into the new moment over ~0.35 s instead of snapping.
   - Blends between moves are eased.
   - The walk loop starts at the phase whose legs match the end of the turn (`WA_PHASE` in `script.js`).
-  - A two-stage pose filter (critically damped, ~30 ms per stage) eases every bone toward its target, so both the pose and its speed change smoothly; this removes pops at blends, loop seams and IK changes (`smoothPose`).
+  - A three-stage pose filter (critically damped, ~21 ms per stage) eases every bone toward its target. The pose, its speed and its acceleration all change continuously, so nothing jolts at blends, loop seams or IK changes (`smoothPose`).
+  - His walking heading is averaged over ±0.4 m of the path (`headingAt`), so he turns into bends at a continuous rate instead of twitching where the spline passes a control point.
+  - The clipboard catch is soft: his reach blends in and out, the board arrives at 60% of its flight speed, and it's carried to his chest with an even ease.
   - Each scene's acting eases in from standstill, and rewinds ease in and out.
   - Every bone is re-posed from the clips each frame before IK, look-at and smoothing are applied (`freshPose`). three.js's mixer skips bones whose animated value didn't change, which let last frame's edits feed back and jitter.
   - `window.__hero3d.step(dt)` advances the pose without the render loop, for frame-by-frame motion analysis.
