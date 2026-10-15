@@ -25,6 +25,17 @@ With GitHub Pages enabled on `main`, the site is served at https://sajjadnisham.
 
 Every CSS, JS and image link in `index.html` carries a `?v=` version tag. Browsers cache GitHub Pages files, so bump that tag on every change (find and replace all), or visitors may get the new page with old files.
 
+## Links in the story
+
+In the NURF scene, four words link out (each opens in a new tab):
+
+- **NURF** → IGMH's National Uro-Renal Fertility Centre page
+- **ADL** → MFDA publications
+- **CAPD** → National Kidney Foundation: peritoneal dialysis
+- **Aasandha** → aasandha.mv
+
+They're in `index.html` (class `xlink`). The story text normally ignores taps so you can grab the character, so these links only become clickable while their scene is on screen (`#film.nurf-live`, set in `script.js`).
+
 ## Social links
 
 The links are in `index.html`, in the `SOCIAL LINKS` block of the Connect scene: Instagram, X, LinkedIn, Gmail, WhatsApp (+960 923 9234) and Facebook.

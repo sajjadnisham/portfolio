@@ -380,3 +380,19 @@ html.lenis, html.lenis body { height: auto; }
   .c-maldives { bottom: 4%; }
   .foot { bottom: 6px; }
 }
+
+/* ---------- Links in the story text (NURF, ADL, CAPD, Aasandha) ----------
+   Clickable only while their scene is on screen (#film.nurf-live), so hidden
+   copy never catches taps meant for other scenes. */
+.xlink {
+  color: inherit; text-decoration: underline; text-decoration-style: dotted;
+  text-decoration-thickness: 1.5px; text-underline-offset: .18em;
+  text-decoration-color: rgba(255,255,255,.55);
+  transition: text-decoration-color .2s, text-shadow .2s;
+}
+#film.nurf-live .xlink { pointer-events: auto; cursor: pointer; }
+.xlink:hover, .xlink:focus-visible {
+  text-decoration-style: solid; text-decoration-color: #fff;
+  text-shadow: 0 0 12px rgba(255,255,255,.45); outline: none;
+}
+.xlink:focus-visible { outline: 1px solid rgba(255,255,255,.6); outline-offset: 3px; border-radius: 2px; }

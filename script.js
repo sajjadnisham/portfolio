@@ -568,7 +568,12 @@
     anticipatePin: 1,
     invalidateOnRefresh: true,
     // cue the acting from where the scroll is heading, not the lagging scrub
-    onUpdate: (self) => direct(self.progress * tl.duration()),
+    onUpdate: (self) => {
+      const t = self.progress * tl.duration();
+      direct(t);
+      // the NURF/ADL/CAPD/Aasandha links work only while that scene is showing
+      film.classList.toggle('nurf-live', t >= 10.6 && t < 15.3);
+    },
   });
 
   // hand the timelines to the 3D avatar module (assets/js/hero3d.js)
