@@ -103,6 +103,8 @@ The hospital scene is the Thalassery Mission Hospital pharmacy photo (`tools/sou
 - `pharmacy-door.webp`: the door leaf. It swings open in CSS (`rotationY`, hinged on its left edge) as he pushes it.
 - `pharmacy-front.webp`: the same wall with the window glass and doorway cut out. `hero3d.js` shows it only while he's inside, so the counter hides his legs and the steel posts pass in front of him.
 
+Once he's at the counter window, the whole scene eases in about 28% (20% on desktop) toward it (`.pzoom` in `index.html`, tweened in `script.js`), and plays back out when scrolling up. A small translucent arrow on the left hints to scroll down until the Connect page.
+
 **Playing inside:** once he's at the window, between scripted moments, visitors can:
 - **tap a shelf:** he walks over (accelerating, braking to a stop, turning at a limited rate, feet locked to the floor), turns, reaches up, takes the medicine kept there and turns back to show a card: what it's used for, the usual adult dose and a pharmacist's tip. There are eight medicines (paracetamol, amoxicillin, metformin, amlodipine, omeprazole, cetirizine, salbutamol, EPO); edit `MEDS` in `hero3d.js`. "Put it back" returns it to the shelf.
 - **drag him:** he's picked up and hangs from the pointer on a spring, swinging as you move. Let go and he falls under gravity (with a little air drag; the walls bounce him back), squashes on impact and gets up.
