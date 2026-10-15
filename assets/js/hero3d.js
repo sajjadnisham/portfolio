@@ -282,90 +282,222 @@ async function boot() {
   const RIM_Y = fl(0, 330).y;             // fuselage rim (everything below is hidden while seated)
 
   /* ---------- the crash through the ceiling ----------
-     A pure function of the time since his feet reach the ceiling (the act
-     timeline's 'crash' label), so it's identical forwards, backwards and on
-     any frame rate: a jagged hole opens, broken ceiling-board pieces fall
-     ballistically (g = 9.81, one damped bounce, then they lie still) and a
-     puff of dust spreads and settles. */
+     Everything here is a pure function of the time since his feet reach the
+     ceiling (the act timeline's 'crash' label), so it plays identically
+     forwards, backwards and at any frame rate. The physics is simulated once
+     at load (fixed 240 Hz steps), recorded at 60 Hz, and played back by
+     interpolation:
+       · his fall: free fall from the leap, the ceiling boards take ~40% of his
+         speed as they break, then free fall again to the floor (script.js
+         uses the same numbers for the tween's ease)
+       · broken ceiling boards and gypsum crumbs: gravity, air drag, spin,
+         bounces with restitution, tipping on the corner that hits first,
+         Coulomb friction while sliding, and settling flat on a face
+       · torn flaps of board stay hinged to the hole and swing down as real
+         (non-linear, damped) pendulums
+       · dust: powder that pours out of the hole and drifts down at its low
+         terminal speed, a cloud that billows and settles, puffs where he and
+         the big pieces hit the floor
+       · the scene shakes briefly at both impacts */
   let dFrontOn = false;
+  const G = 9.81;
+  const FALL = { y0: 4.0, keep: 0.6 };                                 // start height (S3D.gyD) · speed kept through the boards
+  const vCeil = Math.sqrt(2 * G * (FALL.y0 - CEIL)), vThru = vCeil * FALL.keep;
+  const T_FLOOR = (-vThru + Math.sqrt(vThru * vThru + 2 * G * CEIL)) / G;   // ceiling → floor (s)
   const crash = new THREE.Group();
-  const HOLE_C = V3(LANDD.x, CEIL - 0.001, LANDD.z);
-  {
-    const jag = (r0, n, seed) => {
-      const sh = new THREE.Shape();
-      for (let i = 0; i <= n; i++) {
-        const a = (i / n) * Math.PI * 2, r = r0 * (0.72 + 0.4 * Math.abs(Math.sin(a * 3.1 + seed) * Math.cos(a * 1.7 + seed * 2)));
-        i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+  const HOLE_C = V3(LANDD.x, CEIL, LANDD.z);
+  const REC = 60, SIM = 240, DUR = 4.5, NREC = Math.round(DUR * REC) + 1;
+  const UP = V3(0, 1, 0);
+  // the stable resting pose nearest to q: lying on one of its broad faces (a
+  // piece of board balanced on an edge topples over), heading kept
+  const flatOf = (q, out) => {
+    const ax = V3(0, 1, 0).applyQuaternion(q);
+    if (ax.y < 0) ax.negate();
+    return out.setFromUnitVectors(ax, UP).multiply(q);
+  };
+  // rigid box: gravity, quadratic drag, spin, floor contact; returns 60 Hz samples
+  function simulate(b) {
+    const P = new Float32Array(NREC * 3), Q = new Float32Array(NREC * 4);
+    const p = b.p.clone(), v = b.v.clone(), w = b.w.clone(), q = b.q.clone();
+    const corners = [];
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) corners.push(V3(sx * b.half.x, sy * b.half.y, sz * b.half.z));
+    const dt = 1 / SIM, c = V3(0, 0, 0), lowC = V3(0, 0, 0), dq = new THREE.Quaternion(), qf = new THREE.Quaternion(), ax = V3(0, 0, 0);
+    let hit = -1, rest = false;
+    for (let i = 0; i < NREC; i++) {
+      P.set([p.x, p.y, p.z], i * 3); Q.set([q.x, q.y, q.z, q.w], i * 4);
+      for (let k = 0; k < SIM / REC && !rest; k++) {
+        const sp = v.length();
+        v.y -= G * dt; v.addScaledVector(v, -b.drag * sp * dt);
+        p.addScaledVector(v, dt);
+        const om = w.length();
+        if (om > 1e-6) { dq.setFromAxisAngle(ax.copy(w).divideScalar(om), om * dt); q.premultiply(dq).normalize(); }
+        w.multiplyScalar(Math.exp(-0.4 * dt));
+        let low = Infinity;
+        for (const cc of corners) { c.copy(cc).applyQuaternion(q); if (c.y < low) { low = c.y; lowC.copy(c); } }
+        const pen = p.y + low;
+        if (pen < 0) {
+          p.y -= pen;
+          if (hit < 0) hit = (i + k / (SIM / REC)) / REC;
+          if (v.y < 0) {
+            const vn = -v.y;
+            v.y = vn > 0.35 ? vn * b.e : 0;                               // bounce, or stay down
+            const vt = Math.hypot(v.x, v.z);
+            if (vt > 0) { const r = Math.max(0, vt - b.mu * vn) / vt; v.x *= r; v.z *= r; }   // friction impulse
+            w.multiplyScalar(0.5).add(c.crossVectors(lowC, V3(0, vn, 0)).multiplyScalar(b.tip));   // tips over the corner that hit
+          }
+          const vt = Math.hypot(v.x, v.z);                                  // sliding friction
+          if (vt > 0) { const d = Math.min(vt, b.mu * G * dt) / vt; v.x -= v.x * d; v.z -= v.z * d; }
+          flatOf(q, qf); q.slerp(qf, 1 - Math.exp(-dt * 10)); w.multiplyScalar(Math.exp(-dt * 12));
+          if (v.lengthSq() < 1e-4 && w.lengthSq() < 4e-3 && q.angleTo(qf) < 0.01) { q.copy(qf); rest = true; }
+        }
       }
-      return new THREE.ShapeGeometry(sh);
     }
-    const rim = new THREE.Mesh(jag(0.66, 26, 1.3), new THREE.MeshBasicMaterial({ color: 0xcfcac2, side: THREE.DoubleSide }));
-    const hole = new THREE.Mesh(jag(0.52, 26, 0.4), new THREE.MeshBasicMaterial({ color: 0x16130f, side: THREE.DoubleSide }));
-    for (const m of [rim, hole]) { m.rotation.x = Math.PI / 2; m.position.copy(HOLE_C); }
-    hole.position.y -= 0.002;
-    crash.add(rim, hole);
-    crash.userData.hole = [rim, hole];
-    // debris: broken ceiling-board pieces
-    let seed = 5;
+    return { P, Q, hit };
+  }
+  // jagged outline
+  const jag = (r0, n, seed) => {
+    const sh = new THREE.Shape();
+    for (let i = 0; i <= n; i++) {
+      const a = (i / n) * Math.PI * 2, r = r0 * (0.74 + 0.36 * Math.abs(Math.sin(a * 3.1 + seed) * Math.cos(a * 1.7 + seed * 2)));
+      i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    return sh;
+  };
+  const softTexture = () => {                                           // white, soft-edged puff
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+    const g = cv.getContext('2d'), gr = g.createRadialGradient(64, 64, 2, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+  };
+  {
+    let seed = 11;
     const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    const boardM = new THREE.MeshStandardMaterial({ color: 0xe9e6df, roughness: 0.9 });
-    const dustyM = new THREE.MeshStandardMaterial({ color: 0xbdb6aa, roughness: 1 });
-    crash.userData.bits = [];
-    for (let i = 0; i < 18; i++) {
-      const w = 0.08 + rnd() * 0.22, d = 0.06 + rnd() * 0.18, t = 0.02 + rnd() * 0.02;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, t, d), i % 3 ? boardM : dustyM);
-      const a = rnd() * Math.PI * 2, r = rnd() * 0.5;
-      const p0 = V3(HOLE_C.x + Math.cos(a) * r, CEIL - 0.03, HOLE_C.z + Math.sin(a) * r);
-      const sp = 0.4 + rnd() * 1.3;
-      const v0 = V3(Math.cos(a) * sp, -(0.5 + rnd() * 2.5), Math.sin(a) * sp * 0.7);
-      const w0 = V3((rnd() - 0.5) * 14, (rnd() - 0.5) * 10, (rnd() - 0.5) * 14);
-      const delay = rnd() * 0.12;
-      crash.add(m);
-      crash.userData.bits.push({ m, p0, v0, w0, h: t / 2, delay, q0: new THREE.Euler(rnd() * 6, rnd() * 6, rnd() * 6) });
+    const boardM = new THREE.MeshStandardMaterial({ color: 0xeceae4, roughness: 0.95 });
+    const coreM = new THREE.MeshStandardMaterial({ color: 0xcfc8bb, roughness: 1 });
+    // the hole: inside walls and the dark void above (a prism seen from inside),
+    // and the torn, lighter edge of the boards around it
+    const voidG = new THREE.ExtrudeGeometry(jag(0.5, 30, 0.4), { depth: 0.35, bevelEnabled: false });
+    const voidM = new THREE.MeshStandardMaterial({ color: 0x5a5249, roughness: 1, side: THREE.BackSide });   // dim ceiling void, its walls catching some light
+    const hole = new THREE.Mesh(voidG, voidM);
+    const rimS = jag(0.64, 30, 1.3); rimS.holes.push(jag(0.5, 30, 0.4));
+    const rim = new THREE.Mesh(new THREE.ShapeGeometry(rimS), new THREE.MeshStandardMaterial({ color: 0xd6d1c7, roughness: 1, side: THREE.DoubleSide }));
+    hole.rotation.x = -Math.PI / 2; rim.rotation.x = Math.PI / 2;
+    hole.position.copy(HOLE_C); rim.position.copy(HOLE_C); rim.position.y -= 0.004;
+    crash.add(hole, rim);
+    crash.userData.hole = [hole, rim];
+    // falling pieces: board shards, chunks, crumbs
+    const bits = [];
+    const spec = [[5, 0.10, 0.20, 0.007, 0.012, 0.03, 0.2, 1.2], [16, 0.03, 0.08, 0.007, 0.012, 0.025, 0.25, 2], [16, 0.008, 0.02, 0.006, 0.016, 0.02, 0.3, 3]];
+    for (const [n, s0, s1, t0, t1, drag, e, tip] of spec) {
+      for (let i = 0; i < n; i++) {
+        const hx = s0 + rnd() * (s1 - s0), hz = s0 + rnd() * (s1 - s0), hy = t0 + rnd() * (t1 - t0);
+        const m = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2), rnd() < 0.7 ? boardM : coreM);
+        const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 0.42;
+        const p = V3(HOLE_C.x + Math.cos(a) * r, CEIL - hy, HOLE_C.z + Math.sin(a) * r);
+        const push = 1 - r / 0.5;                                        // the middle is driven down hardest by him
+        const v = V3(Math.cos(a), 0, Math.sin(a)).multiplyScalar(0.25 + rnd() * 0.9);
+        v.y = -(0.6 + push * vCeil * (0.35 + rnd() * 0.35));
+        const w = V3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).multiplyScalar(n === 5 ? 9 : 22);
+        const q = new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, rnd() * 6.28, (rnd() - 0.5) * 0.3));
+        const delay = (1 - push) * 0.06 + rnd() * 0.03;
+        const sim = simulate({ p, v, w, q, half: V3(hx, hy, hz), drag, e, mu: 0.5, tip });
+        m.visible = false; crash.add(m);
+        bits.push({ m, sim, delay, big: n === 5 });
+      }
     }
-    // dust: soft sprites that spread and fade
-    const dustT = radialTexture();
-    crash.userData.dust = [];
-    for (let i = 0; i < 7; i++) {
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustT, color: 0xd8d2c6, transparent: true, depthWrite: false, opacity: 0 }));
-      const a = (i / 7) * Math.PI * 2;
-      crash.add(sp);
-      crash.userData.dust.push({ sp, dir: V3(Math.cos(a), -0.6 - 0.3 * (i % 2), Math.sin(a) * 0.6), up: i < 3 });
+    crash.userData.bits = bits;
+    // torn flaps hinged on the edge of the hole: θ'' = (3g / 2L)·cos θ − c·θ'
+    const flaps = [];
+    for (const [a, L, wd] of [[0.5, 0.2, 0.26], [2.6, 0.16, 0.22], [4.3, 0.22, 0.2]]) {
+      const g = new THREE.BoxGeometry(wd, 0.012, L); g.translate(0, 0, -L / 2);   // hinge along its edge
+      const piv = new THREE.Group(); piv.rotation.order = 'YXZ';        // yaw to face the hole, then swing on the hinge
+      piv.position.set(HOLE_C.x + Math.cos(a) * 0.5, CEIL - 0.006, HOLE_C.z + Math.sin(a) * 0.5);
+      piv.rotation.y = Math.PI / 2 - a;                                  // flap reaches in, over the hole
+      const fm = new THREE.Mesh(g, boardM); piv.add(fm); crash.add(piv);
+      const th = new Float32Array(NREC); let t = 0, om = 7 + 3 * L;       // knocked down as he passes
+      for (let i = 0; i < NREC; i++) {
+        th[i] = t;
+        for (let k = 0; k < SIM / REC; k++) { const acc = (3 * G / (2 * L)) * Math.cos(t) - 2.2 * om; om += acc / SIM; t += om / SIM; }
+      }
+      flaps.push({ piv, fm, th });
     }
+    crash.userData.flaps = flaps;
+    // dust
+    const tex = softTexture();
+    const puff = (col, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: col, transparent: true, depthWrite: false, opacity: 0 })); crash.add(sp); return sp; };
+    const dust = [];
+    for (let i = 0; i < 34; i++) {                                     // powder pouring out (linear drag, τ ≈ 0.2 s → ~2 m/s)
+      const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 0.4;
+      dust.push({ kind: 'powder', sp: puff(0xc9c2b6), t0: rnd() * 0.7, tau: 0.14 + rnd() * 0.14,
+        p0: V3(HOLE_C.x + Math.cos(a) * r, CEIL - 0.02, HOLE_C.z + Math.sin(a) * r),
+        v0: V3(Math.cos(a) * (0.1 + rnd() * 0.5), -(0.5 + rnd() * 2.5), Math.sin(a) * (0.1 + rnd() * 0.5)), s0: 0.06 + rnd() * 0.08, life: 1.6 + rnd() * 1.4 });
+    }
+    for (let i = 0; i < 9; i++) {                                      // the cloud under the hole
+      const a = (i / 9) * Math.PI * 2;
+      dust.push({ kind: 'cloud', sp: puff(0xbfb8ac), a, sink: 0.3 + rnd() * 0.5, s0: 0.3 + rnd() * 0.25 });
+    }
+    for (let i = 0; i < 10; i++) {                                     // his landing kicks dust along the floor
+      const a = (i / 10) * Math.PI * 2 + rnd() * 0.4;
+      dust.push({ kind: 'floor', sp: puff(0xc4bdb1), a, at: T_FLOOR, c: LANDD, reach: 0.5 + rnd() * 0.5 });
+    }
+    for (const b of bits) if (b.big && b.sim.hit > 0) {
+      const k = Math.min(NREC - 1, Math.round((b.delay + b.sim.hit) * REC));
+      const c = V3(b.sim.P[k * 3], 0, b.sim.P[k * 3 + 2]);
+      for (let i = 0; i < 3; i++) dust.push({ kind: 'floor', sp: puff(0xcac3b7), a: rnd() * 6.28, at: b.delay + b.sim.hit, c, reach: 0.15 + rnd() * 0.2, small: true });
+    }
+    crash.userData.dust = dust;
   }
-  // ballistic position at time t (after its delay), with one damped bounce
-  function fallAt(b, t) {
-    const g = 9.81, p = b.p0.clone();
-    const vy = b.v0.y, y0 = b.p0.y - b.h;
-    const t1 = (vy + Math.sqrt(vy * vy + 2 * g * y0)) / g;            // first touch: y0 + vy·t − g t²/2 = 0
-    if (t <= t1) { p.x += b.v0.x * t; p.z += b.v0.z * t; p.y += vy * t - 0.5 * g * t * t; return [p, t]; }
-    const vImp = -vy + g * t1, e = 0.28, v2 = vImp * e, t2 = 2 * v2 / g;
-    const hx = b.v0.x * t1, hz = b.v0.z * t1, k = 0.45;                  // sliding slows on contact
-    const tb = Math.min(t - t1, t2);
-    p.x += hx + b.v0.x * k * tb; p.z += hz + b.v0.z * k * tb;
-    p.y = b.h + v2 * tb - 0.5 * g * tb * tb;
-    return [p, t1 + tb * 0.5];
-  }
+  const setB = document.querySelector('.set-b');
+  const RM_CRASH = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
   function crashFx(t) {
     const on = t > 0;
     crash.visible = on;
+    const shake = on && !RM_CRASH ? [[0, 2.5], [T_FLOOR, 5]].reduce((acc, [t0, A]) => {
+      const u = t - t0; return u > 0 ? acc + A * Math.exp(-u / 0.11) * Math.sin(u * 2 * Math.PI * 15) : acc;
+    }, 0) : 0;
+    if (setB) setB.style.translate = Math.abs(shake) > 0.05 ? `${(shake * 0.35).toFixed(2)}px ${shake.toFixed(2)}px` : '';
     if (!on) return;
-    const [rim, hole] = crash.userData.hole;
-    const open = THREE.MathUtils.smoothstep(t, 0, 0.09);
-    rim.scale.setScalar(Math.max(0.001, open)); hole.scale.setScalar(Math.max(0.001, open));
+    const open = THREE.MathUtils.smootherstep(t, 0, 0.07);
+    for (const m of crash.userData.hole) m.scale.set(Math.max(0.001, open), Math.max(0.001, open), 1);
+    const sample = (arr, n, x) => { const i = Math.min(NREC - 2, Math.floor(x)), f = Math.min(1, x - i); return [i, f]; };
     for (const b of crash.userData.bits) {
-      const tt = Math.max(0, t - b.delay);
-      b.m.visible = t > b.delay;
-      const [p, spin] = fallAt(b, tt);
-      b.m.position.copy(p);
-      b.m.rotation.set(b.q0.x + b.w0.x * spin, b.q0.y + b.w0.y * spin, b.q0.z + b.w0.z * spin);
+      const x = (t - b.delay) * REC;
+      b.m.visible = x > 0;
+      if (x <= 0) continue;
+      const [i, f] = sample(null, 0, x), P = b.sim.P, Q = b.sim.Q;
+      b.m.position.set(P[i * 3] + (P[i * 3 + 3] - P[i * 3]) * f, P[i * 3 + 1] + (P[i * 3 + 4] - P[i * 3 + 1]) * f, P[i * 3 + 2] + (P[i * 3 + 5] - P[i * 3 + 2]) * f);
+      qa.fromArray(Q, i * 4); qb.fromArray(Q, i * 4 + 4);
+      b.m.quaternion.slerpQuaternions(qa, qb, f);
+    }
+    for (const fl of crash.userData.flaps) {
+      const x = t * REC, [i, f] = sample(null, 0, x);
+      fl.piv.rotation.x = -(fl.th[i] + (fl.th[i + 1] - fl.th[i]) * f) * open;   // swings down about its hinge
     }
     for (const d of crash.userData.dust) {
-      const k = Math.min(1, t / 2.2), e = 1 - (1 - k) ** 3;
-      d.sp.position.copy(HOLE_C).addScaledVector(d.dir, 0.9 * e);
-      d.sp.position.y = Math.max(0.3, d.up ? CEIL - 0.3 - 0.4 * e : CEIL - 0.2 - 2.6 * e);
-      d.sp.scale.setScalar(0.35 + 1.4 * e);
-      d.sp.material.opacity = 0.55 * THREE.MathUtils.smoothstep(t, 0, 0.12) * (1 - k);
+      const m = d.sp.material;
+      if (d.kind === 'powder') {
+        const u = t - d.t0;
+        if (u <= 0 || u > d.life) { m.opacity = 0; continue; }
+        const vT = -G * d.tau, e = 1 - Math.exp(-u / d.tau);
+        d.sp.position.set(d.p0.x + d.v0.x * d.tau * e, d.p0.y + vT * u + (d.v0.y - vT) * d.tau * e, d.p0.z + d.v0.z * d.tau * e);
+        d.sp.position.y = Math.max(d.s0, d.sp.position.y);
+        d.sp.scale.setScalar(d.s0 * (1 + 2.2 * u));
+        m.opacity = 0.5 * THREE.MathUtils.smoothstep(u, 0, 0.1) * (1 - u / d.life) ** 1.5;
+      } else if (d.kind === 'cloud') {
+        const k = Math.min(1, t / 3.2), e = 1 - (1 - k) ** 3;
+        d.sp.position.set(HOLE_C.x + Math.cos(d.a) * 0.55 * e, CEIL - 0.25 - d.sink * e * 2, HOLE_C.z + Math.sin(d.a) * 0.4 * e);
+        d.sp.scale.setScalar(d.s0 + 1.3 * e);
+        m.opacity = 0.45 * THREE.MathUtils.smoothstep(t, 0, 0.15) * (1 - k) ** 1.4;
+      } else {
+        const u = t - d.at;
+        if (u <= 0 || u > 1.8) { m.opacity = 0; continue; }
+        const e = 1 - Math.exp(-u / 0.25);                                // thrown out, slowed by the air
+        d.sp.position.set(d.c.x + Math.cos(d.a) * d.reach * e, (d.small ? 0.05 : 0.12) + 0.15 * e, d.c.z + Math.sin(d.a) * d.reach * 0.6 * e);
+        d.sp.scale.setScalar((d.small ? 0.12 : 0.25) + (d.small ? 0.3 : 0.6) * e);
+        m.opacity = (d.small ? 0.35 : 0.5) * THREE.MathUtils.smoothstep(u, 0, 0.06) * (1 - u / 1.8) ** 2;
+      }
     }
   }
 

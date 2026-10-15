@@ -114,9 +114,14 @@ Once he's at the counter window, the whole scene eases in about 28% (20% on desk
 
 The NURF Pharmacy scene is a photo of an Oncology Department corridor with the pharmacy counter (`tools/source/oncology-photo.jpg`), built by `tools/make_oncology.py` on the 941×1672 canvas:
 
-- `oncology.webp`: the photo with the customer and the front pharmacist removed (LaMa inpainting), the boards re-lettered in perspective ("ONCOLOGY Department", "NURF PHARMACY"), the ceiling and floor extended, and the top fading to dark for the story text.
+- `oncology.webp`: the photo with all the people removed (the customer, the three pharmacists, and the patient and staff member inside the department) (LaMa inpainting), the boards re-lettered in perspective ("ONCOLOGY Department", "NURF PHARMACY"), the ceiling and floor extended, and the top fading to dark for the story text.
 - `oncology-front.webp`: the same scene with the doorway and the pharmacy window cut out (monitors, sign and sanitiser kept). `hero3d.js` shows it once he's walked past the doorway, so the wall and the counter pass in front of him.
-- **Crash:** when he drops from the plane, a jagged hole tears open in the ceiling, 18 chunks of debris fall with gravity (one bounce, then slide) and dust puffs spread and fade. It is a pure function of time since the `crash` label, so it scrubs both ways (`crashFx` in `hero3d.js`).
+- **Crash (real physics):** he drops through the ceiling of the department's room behind its open door. Everything is a pure function of the time since the `crash` label, so it scrubs both ways (`crashFx` in `hero3d.js`). The rigid pieces are simulated once at load (240 Hz steps, recorded at 60 Hz).
+  - **His fall:** free fall from the leap, the ceiling boards take about 40% of his speed as they break, then free fall again to the floor. `script.js` uses the same numbers for the tween's ease and the `crash` label.
+  - **Boards and gypsum crumbs:** gravity, air drag and spin. They bounce with restitution and tip over the corner that hits first, slide with Coulomb friction, then settle flat (a piece balanced on its edge topples).
+  - **Torn flaps:** they stay hinged to the hole and swing down as damped, non-linear pendulums.
+  - **Dust:** powder pours out of the hole and drifts down at its low terminal speed. A cloud billows under the hole and settles, and puffs kick up where he and the big pieces hit the floor.
+  - **Impacts:** the scene shakes briefly at the ceiling and at the floor (not with reduced motion).
 - **Walk:** a centripetal Catmull-Rom path from where he lands inside the department (12 m back), out through its doorway, behind the pillar, to the counter (`curveD`). His pace eases in and out with no jolt (the acceleration itself ramps, `paceD`), and the walk cycle is locked to the distance covered so his feet don't slide.
 
 ## Artwork

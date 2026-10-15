@@ -333,8 +333,18 @@
   act.to(rock, { v: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)', onUpdate: rockChair }, `${J}+=${L + 0.07}`);
   act.to(sitterRig, { rotation: -1.4 * M, duration: 0.3, ease: 'sine.out' }, `${J}+=${L + 0.4}`);        // leans back
   act.to(sitterRig, { rotation: 0, duration: 0.5, ease: 'sine.inOut' }, `${J}+=${L + 0.7}`);
-  act.addLabel('crash', `${J}+=1.33`);   // his feet go through the ceiling
-  act.addLabel('desk', `${J}+=11.6`);   // crash in, walk into the pharmacy, sit and start working
+  // real physics: free fall from 4 m; the ceiling boards (2.7 m) take 40% of
+  // his speed as they break; free fall again to the floor (hero3d.js uses the
+  // same numbers for the debris and dust)
+  const FALL = (() => {
+    const g = 9.81, y0 = 4.0, ceil = 2.7, keep = 0.6;
+    const t1 = Math.sqrt(2 * (y0 - ceil) / g), v2 = g * t1 * keep;
+    const t2 = (-v2 + Math.sqrt(v2 * v2 + 2 * g * ceil)) / g, T = t1 + t2;
+    const y = (t) => (t < t1 ? y0 - 0.5 * g * t * t : ceil - v2 * (t - t1) - 0.5 * g * (t - t1) ** 2);
+    return { t1, T, ease: (p) => (y0 - Math.max(0, y(p * T))) / y0 };
+  })();
+  act.addLabel('crash', `${J}+=${0.85 + FALL.t1}`);   // his feet go through the ceiling
+  act.addLabel('desk', `${J}+=11.76`);   // crash in, walk into the pharmacy, sit and start working
 
   /* ---------------------------------------------------------
      3D acting (assets/js/hero3d.js renders it). These tweens only move
@@ -407,28 +417,28 @@
   x3({ gyP: 4.2, duration: 0.45, ease: 'power2.in' }, 'files+=0.3');
   // falls from the plane through the ceiling inside the Oncology Department (the
   // 'crash' label: hole, falling debris, dust; see hero3d.js), lands on his feet
-  x3({ gyD: 0, duration: 0.85, ease: 'power2.in' }, 'files+=0.85');       // gravity all the way down
-  x3({ tLand: 0.33, duration: 0.85, ease: 'power1.in' }, 'files+=0.85');  // the clip's own drop, matched
-  x3({ tLand: 2.1, duration: 1.8 }, 'files+=1.7');                         // impact, knees bend, rises
+  x3({ gyD: 0, duration: FALL.T, ease: FALL.ease }, 'files+=0.85');        // the fall, as above
+  x3({ tLand: 0.33, duration: FALL.T, ease: 'power1.in' }, 'files+=0.85'); // the clip's own drop, matched
+  x3({ tLand: 2.1, duration: 1.8 }, `files+=${0.85 + FALL.T}`);           // impact, knees bend, rises
   // …walks out through the department's open door, behind the pillar, into the
   // pharmacy, comes to the counter and sits down at it to work
-  x3({ turnD: 1, duration: 0.6, ease: 'sine.inOut' }, 'files+=2.9');
-  x3({ wLand: 0, wWalkD: 1, duration: 0.5, ease: 'sine.inOut' }, 'files+=2.85');
-  x3({ dW: 1, duration: 5.85, ease: 'none' }, 'files+=2.95');                // paced in hero3d.js (paceD)
-  x3({ wWalkD: 0, duration: 0.5, ease: 'sine.inOut' }, 'files+=8.4');
-  x3({ faceD: 1, duration: 0.6, ease: 'sine.inOut' }, 'files+=8.5');
-  x3({ wSTS: 1, duration: 0.35, ease: 'sine.inOut' }, 'files+=8.95');
-  x3({ tSTS: 2.23, duration: 2.23 }, 'files+=8.95');
-  x3({ bump: 1, duration: 0.08, ease: 'power1.out' }, 'files+=10.37');
-  x3({ bump: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)' }, 'files+=10.45');
-  x3({ wSTS: 0, wType: 1, duration: 0.5, ease: 'sine.inOut' }, 'files+=10.95');
+  x3({ turnD: 1, duration: 0.6, ease: 'sine.inOut' }, 'files+=3.06');
+  x3({ wLand: 0, wWalkD: 1, duration: 0.5, ease: 'sine.inOut' }, 'files+=3.01');
+  x3({ dW: 1, duration: 5.85, ease: 'none' }, 'files+=3.11');                // paced in hero3d.js (paceD)
+  x3({ wWalkD: 0, duration: 0.5, ease: 'sine.inOut' }, 'files+=8.56');
+  x3({ faceD: 1, duration: 0.6, ease: 'sine.inOut' }, 'files+=8.66');
+  x3({ wSTS: 1, duration: 0.35, ease: 'sine.inOut' }, 'files+=9.11');
+  x3({ tSTS: 2.23, duration: 2.23 }, 'files+=9.11');
+  x3({ bump: 1, duration: 0.08, ease: 'power1.out' }, 'files+=10.53');
+  x3({ bump: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)' }, 'files+=10.61');
+  x3({ wSTS: 0, wType: 1, duration: 0.5, ease: 'sine.inOut' }, 'files+=11.11');
 
   /* Face (face.js): a gentle smile when he faces us, neutral while he walks and works */
   const face = (vars, at, duration = 0.5) => x3({ ...vars, duration, ease: 'sine.inOut' }, at);
   face({ smile: 0 }, 0.3, 0.6);                                        // sets off toward the pharmacy
   face({ smile: 0.45 }, 7.8);                                          // turns to us at the counter
   face({ smile: 0 }, 'hosp', 0.3);
-  face({ smile: 0.35 }, 'files+=10.95', 0.6);                            // at the keyboard
+  face({ smile: 0.35 }, 'files+=11.11', 0.6);                            // at the keyboard
 
   /* --- S1 · the opening: he falls out of the sky and lands in front of us --- */
   // Everything above moves later by INTRO; the fall plays when scrolling starts (CUES).
