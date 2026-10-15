@@ -64,7 +64,7 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
 
 `assets/js/hero3d.js` (three.js, vendored in `assets/vendor/three/`) renders Nisham's avatar into the illustrated scenes.
 
-- **Character:** a glossy toy-brick minifigure of Nisham in the classic palette, modelled in code (`assets/js/minifig.js`): bright yellow face, hands, arms and torso; a rounded cylinder head with a printed-style face (dot eyes, thick brows, dark beard and moustache, white grin) and a moulded curly hair piece; a white apron (bib with neck straps, pocket with a red pen, ID badge, waist band, and a two-panel skirt to the knees that follows his thighs as he walks and sits); navy legs and black feet. Colours are in `COL` at the top of the file. The earlier soft cartoon is still in `assets/js/cartoon.js`; switch with `STYLE` in `hero3d.js`.
+- **Character:** a glossy toy-brick minifigure of Nisham in the classic palette, modelled in code (`assets/js/minifig.js`): bright yellow face, hands, arms and torso; a rounded cylinder head with a printed-style face (dot eyes, thick brows, dark beard and moustache, white grin) and a moulded curly hair piece; a full white clinical coat over the yellow body: white torso and sleeves, collar, lapels, buttons, a breast pocket with a red pen, an ID badge, hip pockets, and a skirt that wraps all the way round to the knees, following his thighs as he walks and sits; navy legs and black feet. Colours are in `COL` at the top of the file. The earlier soft cartoon is still in `assets/js/cartoon.js`; switch with `STYLE` in `hero3d.js`.
 - **Skeleton:** `assets/3d/nisham.glb` (0.46 MB) is the animated skeleton from the Avaturn avatar, stripped of its textures and extra meshes by `tools/make_skeleton.py`.
 - **Moves:** Mixamo clips (idle, turn-and-walk, walk, pilot, wave, jump, Landing, Stand To Sit, Type To Sit, Stand Up) (`tools/source/3d/*.fbx`) baked into `assets/3d/moves.json` by `node tools/bake-moves.js` (needs a static server on port 8765 and Playwright).
 - **One renderer, three places:** its canvas moves into the hospital scene, the cockpit, or between the office chair and the desk. The painted layers around it still cover him correctly (behind the desk and laptop, legs hidden in the fuselage).
@@ -89,6 +89,7 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
   - Clip playback never changes speed mid-move: the plane leap eases into one steady pace, the office landing eases into motion, and the clipboard catch is a soft give rather than a twitch (found by measuring jerk frame by frame).
   - The head's follow-through uses filtered body acceleration, so it never jitters.
   - Shaders are compiled at load, so switching scenes doesn't hitch.
+  - Animation steps use a lightly smoothed frame time that stays locked to real time, so irregular phone frame timing (e.g. 12 / 21 ms pairs) doesn't make motion stutter.
   - Rendering is capped at 1.5×, and drops once to 1× on devices that can't hold about 45 fps (it never flips back and forth).
   - Phones skip the costly blur-to-sharp text effect.
 - **Changing the look:** edit `assets/js/cartoon.js` (the `COL` colours, the coat profile, the head size `HEAD_K`). To use a rigged 3D model from another tool instead, it needs a Mixamo-style humanoid skeleton.
