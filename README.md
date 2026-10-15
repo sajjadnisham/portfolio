@@ -54,7 +54,7 @@ There are two timelines in `script.js`:
 | 3.7 | COVID | puts the mask on two-handed, as a person really does: holds it by both loops at his waist, lifts it to his face, hooks both loops over his ears, pinches the nose bridge, pulls it under his chin, lowers his hands |
 | 5.1 | NABH | a clipboard is tossed in on an arc; he catches it, holds it to his chest and sits down inside with it; "(NABH)" appears above the sign letter by letter |
 | 7.1 | Maldives | plane flies in; he pilots with one hand and waves with the other |
-| 8.95 | NURF Pharmacy, IGMH | crouches, leaps out of the cockpit (the plane flies on), drops in as IGMH rises and lands on his feet, sits back into his chair (it rocks under him), starts typing |
+| 8.95 | NURF Pharmacy | crouches and leaps out of the cockpit (the plane flies on), crashes through the ceiling of the Oncology Department (a jagged hole, falling debris, dust), lands on his feet, walks through the doorway into the NURF Pharmacy and sits down behind the counter at his laptop |
 | 11.6 | Responsibilities | he works at his laptop (typing in natural bursts) and swivels with the chair, right through to the end; the seven duties appear one by one and stay until the Connect page |
 | 15.2 | Connect | everything lifts away, the social-link orbit draws in |
 
@@ -64,7 +64,7 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
 
 `assets/js/hero3d.js` (three.js, vendored in `assets/vendor/three/`) renders Nisham's avatar into the illustrated scenes.
 
-- **Character:** Nisham as a late-90s TV-cartoon scientist, modelled in code (`assets/js/labtoon.js`): flat cel shading (three hard tones) with thick black ink outlines (an inverted hull on every skinned mesh, pushed out along the skinned normal so it bends with him); a big, wide boxy head with thick black round glasses (white lenses, dot pupils that blink), brows, short curly hair, beard and moustache and a wide grin; a white lab coat with lapels, pocket and pen, ID badge and a skirt to the knees; purple rubber gloves and chunky black boots. The earlier looks are kept: `minifig.js` (toy brick) and `cartoon.js` (soft cartoon); switch with `STYLE` in `hero3d.js`.
+- **Character:** Nisham in an animated-feature (Disney-like) style, modelled in code (`assets/js/disney.js`): a big friendly head with a mop of wavy, curly black hair (spiral locks, one curl falling on the forehead), big glossy eyes with two highlights, a round button nose, thick dark arched brows, rosy cheeks, beard and moustache and a soft smile; a white lab coat with a pen in the pocket, dark trousers and shoes. The earlier looks are kept: `labtoon.js` (TV-cartoon scientist), `minifig.js` (toy brick) and `cartoon.js` (soft cartoon); switch with `STYLE` in `hero3d.js`.
 - **Skeleton:** `assets/3d/nisham.glb` (0.46 MB) is the animated skeleton from the Avaturn avatar, stripped of its textures and extra meshes by `tools/make_skeleton.py`.
 - **Moves:** Mixamo clips (idle, turn-and-walk, walk, pilot, wave, jump, Landing, Stand To Sit, Type To Sit, Stand Up) (`tools/source/3d/*.fbx`) baked into `assets/3d/moves.json` by `node tools/bake-moves.js` (needs a static server on port 8765 and Playwright).
 - **One renderer, three places:** its canvas moves into the hospital scene, the cockpit, or between the office chair and the desk. The painted layers around it still cover him correctly (behind the desk and laptop, legs hidden in the fuselage).
@@ -92,7 +92,7 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
   - Animation steps use a lightly smoothed frame time that stays locked to real time, so irregular phone frame timing (e.g. 12 / 21 ms pairs) doesn't make motion stutter.
   - Rendering is capped at 1.5×, and drops once to 1× on devices that can't hold about 45 fps (it never flips back and forth).
   - Phones skip the costly blur-to-sharp text effect.
-- **Changing the look:** edit `assets/js/cartoon.js` (the `COL` colours, the coat profile, the head size `HEAD_K`). To use a rigged 3D model from another tool instead, it needs a Mixamo-style humanoid skeleton.
+- **Changing the look:** edit `assets/js/disney.js` (the `COL` colours, the coat profile, the head size `HEAD_K`). To use a rigged 3D model from another tool instead, it needs a Mixamo-style humanoid skeleton.
 - **Final round photo:** `tools/make_avatar.py` crops `tools/source/photo.webp` (cyan backdrop kept) into `assets/img/avatar.webp`.
 
 ## The pharmacy scene
@@ -109,6 +109,15 @@ Once he's at the counter window, the whole scene eases in about 28% (20% on desk
 - **tap a shelf:** he walks over (accelerating, braking to a stop, turning at a limited rate, feet locked to the floor), turns, reaches up, takes the medicine kept there and turns back to show a card: what it's used for, the usual adult dose and a pharmacist's tip. There are eight medicines (paracetamol, amoxicillin, metformin, amlodipine, omeprazole, cetirizine, salbutamol, EPO); edit `MEDS` in `hero3d.js`. "Put it back" returns it to the shelf.
 - **drag him:** he's picked up and hangs from the pointer on a spring, swinging as you move. Let go and he falls under gravity (with a little air drag; the walls bounce him back), squashes on impact and gets up.
 - If he was sitting, he stands up first. Scrolling to the next moment hands him back to the story with a short blend.
+
+## The office scene
+
+The NURF Pharmacy scene is a photo of an Oncology Department corridor with the pharmacy counter (`tools/source/oncology-photo.jpg`), built by `tools/make_oncology.py` on the 941×1672 canvas:
+
+- `oncology.webp`: the photo with the customer and the front pharmacist removed (LaMa inpainting), the boards re-lettered in perspective ("ONCOLOGY Department", "NURF PHARMACY"), the ceiling and floor extended, and the top fading to dark for the story text.
+- `oncology-front.webp`: the same scene with the doorway and the pharmacy window cut out (monitors, sign and sanitiser kept). `hero3d.js` shows it once he's walked past the doorway, so the wall and the counter pass in front of him.
+- **Crash:** when he drops from the plane, a jagged hole tears open in the ceiling, 18 chunks of debris fall with gravity (one bounce, then slide) and dust puffs spread and fade. It is a pure function of time since the `crash` label, so it scrubs both ways (`crashFx` in `hero3d.js`).
+- **Walk:** a centripetal Catmull-Rom path from where he lands, through the doorway, to the counter (`curveD`); the walk cycle is locked to the distance covered so his feet don't slide.
 
 ## Artwork
 

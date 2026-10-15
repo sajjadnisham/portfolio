@@ -49,7 +49,7 @@ async function boot() {
 
   /* ---------- assets ---------- */
   // 'labtoon' = 90s TV-cartoon scientist (labtoon.js); 'minifig' = toy-brick (minifig.js); 'cartoon' = soft cartoon (cartoon.js)
-  const STYLE = 'labtoon';
+  const STYLE = 'disney';
   const [gltf, moves, { buildCartoon, blinker }] = await Promise.all([
     new GLTFLoader().loadAsync(`assets/3d/nisham.glb?v=${V}`),              // the animated skeleton
     fetch(`assets/3d/moves.json?v=${V}`).then((r) => { if (!r.ok) throw new Error('moves ' + r.status); return r.json(); }),
@@ -246,10 +246,16 @@ async function boot() {
   const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
   const lerpA = (a, b, t) => a + wrapA(b - a) * t;
   // IGMH desk: horizon at his eye line (row 760), 560 px per metre at the chair.
-  const camD = paintedCamera(941, 1672, 2297, 760, 1.2);
-  const dDesk = 2297 / 560;
-  const SEAT = new THREE.Vector3((472 - 470.5) * dDesk / 2297, 0, -dDesk);
-  const DESK_TOP_Y = camD.userData.eye - (992 - camD.userData.hz) * dDesk / camD.userData.f;
+  // Office (tools/make_oncology.py): horizon row 671, f 1061 px, eye 1.6 m;
+  // the pharmacy counter front is 5.6 m away, the department wall 6.6 m.
+  const camD = paintedCamera(941, 1672, 1061, 671, 1.6);
+  const toXD = (u, d) => (u - 470.5) * d / 1061;
+  const CEIL = 3.4;                                                    // ceiling height (m)
+  const LANDD = V3(toXD(208, 4.2), 0, -4.2);                          // in front of the department doorway
+  const STANDD = V3(toXD(486, 6.0), 0, -6.0);                         // at the counter, between the monitors
+  const curveD = new THREE.CatmullRomCurve3([LANDD, V3(-1.62, 0, -6.6), V3(-1.4, 0, -7.05), V3(-0.4, 0, -7.05), STANDD], false, 'centripetal');
+  const lenD = curveD.getLength();
+  const SEAT = STANDD.clone(); SEAT.z += rootAt('standToSit', 2.23)[1];   // (where he ends up sitting)
   // Aeroplane: orthographic, flight frame is 675×565 units, 300 units per metre.
   const PXM = 280;
   // the cockpit canvas reaches well past the plane (see .host-p) so the leap stays in view
@@ -263,6 +269,94 @@ async function boot() {
   const PILOT_HIPS = moves.clips.pilot.tracks.find((t) => t.n === 'Hips.position').v[1];
   const RIM_Y = fl(0, 330).y;             // fuselage rim (everything below is hidden while seated)
 
+  /* ---------- the crash through the ceiling ----------
+     A pure function of the time since his feet reach the ceiling (the act
+     timeline's 'crash' label), so it's identical forwards, backwards and on
+     any frame rate: a jagged hole opens, broken ceiling-board pieces fall
+     ballistically (g = 9.81, one damped bounce, then they lie still) and a
+     puff of dust spreads and settles. */
+  let dFrontOn = false;
+  const crash = new THREE.Group();
+  const HOLE_C = V3(LANDD.x, CEIL - 0.001, LANDD.z);
+  {
+    const jag = (r0, n, seed) => {
+      const sh = new THREE.Shape();
+      for (let i = 0; i <= n; i++) {
+        const a = (i / n) * Math.PI * 2, r = r0 * (0.72 + 0.4 * Math.abs(Math.sin(a * 3.1 + seed) * Math.cos(a * 1.7 + seed * 2)));
+        i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      return new THREE.ShapeGeometry(sh);
+    }
+    const rim = new THREE.Mesh(jag(0.78, 26, 1.3), new THREE.MeshBasicMaterial({ color: 0xcfcac2, side: THREE.DoubleSide }));
+    const hole = new THREE.Mesh(jag(0.62, 26, 0.4), new THREE.MeshBasicMaterial({ color: 0x16130f, side: THREE.DoubleSide }));
+    for (const m of [rim, hole]) { m.rotation.x = Math.PI / 2; m.position.copy(HOLE_C); }
+    hole.position.y -= 0.002;
+    crash.add(rim, hole);
+    crash.userData.hole = [rim, hole];
+    // debris: broken ceiling-board pieces
+    let seed = 5;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const boardM = new THREE.MeshStandardMaterial({ color: 0xe9e6df, roughness: 0.9 });
+    const dustyM = new THREE.MeshStandardMaterial({ color: 0xbdb6aa, roughness: 1 });
+    crash.userData.bits = [];
+    for (let i = 0; i < 18; i++) {
+      const w = 0.08 + rnd() * 0.22, d = 0.06 + rnd() * 0.18, t = 0.02 + rnd() * 0.02;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, t, d), i % 3 ? boardM : dustyM);
+      const a = rnd() * Math.PI * 2, r = rnd() * 0.5;
+      const p0 = V3(HOLE_C.x + Math.cos(a) * r, CEIL - 0.03, HOLE_C.z + Math.sin(a) * r);
+      const sp = 0.4 + rnd() * 1.3;
+      const v0 = V3(Math.cos(a) * sp, -(0.5 + rnd() * 2.5), Math.sin(a) * sp * 0.7);
+      const w0 = V3((rnd() - 0.5) * 14, (rnd() - 0.5) * 10, (rnd() - 0.5) * 14);
+      const delay = rnd() * 0.12;
+      crash.add(m);
+      crash.userData.bits.push({ m, p0, v0, w0, h: t / 2, delay, q0: new THREE.Euler(rnd() * 6, rnd() * 6, rnd() * 6) });
+    }
+    // dust: soft sprites that spread and fade
+    const dustT = radialTexture();
+    crash.userData.dust = [];
+    for (let i = 0; i < 7; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustT, color: 0xd8d2c6, transparent: true, depthWrite: false, opacity: 0 }));
+      const a = (i / 7) * Math.PI * 2;
+      crash.add(sp);
+      crash.userData.dust.push({ sp, dir: V3(Math.cos(a), -0.6 - 0.3 * (i % 2), Math.sin(a) * 0.6), up: i < 3 });
+    }
+  }
+  // ballistic position at time t (after its delay), with one damped bounce
+  function fallAt(b, t) {
+    const g = 9.81, p = b.p0.clone();
+    const vy = b.v0.y, y0 = b.p0.y - b.h;
+    const t1 = (vy + Math.sqrt(vy * vy + 2 * g * y0)) / g;            // first touch: y0 + vy·t − g t²/2 = 0
+    if (t <= t1) { p.x += b.v0.x * t; p.z += b.v0.z * t; p.y += vy * t - 0.5 * g * t * t; return [p, t]; }
+    const vImp = -vy + g * t1, e = 0.28, v2 = vImp * e, t2 = 2 * v2 / g;
+    const hx = b.v0.x * t1, hz = b.v0.z * t1, k = 0.45;                  // sliding slows on contact
+    const tb = Math.min(t - t1, t2);
+    p.x += hx + b.v0.x * k * tb; p.z += hz + b.v0.z * k * tb;
+    p.y = b.h + v2 * tb - 0.5 * g * tb * tb;
+    return [p, t1 + tb * 0.5];
+  }
+  function crashFx(t) {
+    const on = t > 0;
+    crash.visible = on;
+    if (!on) return;
+    const [rim, hole] = crash.userData.hole;
+    const open = THREE.MathUtils.smoothstep(t, 0, 0.09);
+    rim.scale.setScalar(Math.max(0.001, open)); hole.scale.setScalar(Math.max(0.001, open));
+    for (const b of crash.userData.bits) {
+      const tt = Math.max(0, t - b.delay);
+      b.m.visible = t > b.delay;
+      const [p, spin] = fallAt(b, tt);
+      b.m.position.copy(p);
+      b.m.rotation.set(b.q0.x + b.w0.x * spin, b.q0.y + b.w0.y * spin, b.q0.z + b.w0.z * spin);
+    }
+    for (const d of crash.userData.dust) {
+      const k = Math.min(1, t / 2.2), e = 1 - (1 - k) ** 3;
+      d.sp.position.copy(HOLE_C).addScaledVector(d.dir, 0.9 * e);
+      d.sp.position.y = Math.max(0.3, d.up ? CEIL - 0.3 - 0.4 * e : CEIL - 0.2 - 2.6 * e);
+      d.sp.scale.setScalar(0.35 + 1.4 * e);
+      d.sp.material.opacity = 0.55 * THREE.MathUtils.smoothstep(t, 0, 0.12) * (1 - k);
+    }
+  }
+
   /* ---------- hosts (DOM layers the canvas moves between) ---------- */
   const hosts = { H: el.hostH, P: el.hostP, D: el.hostD };
   let frame = null;
@@ -270,9 +364,11 @@ async function boot() {
     if (f === frame) return;
     frame = f;
     hosts[f].appendChild(canvas);
-    for (const s of Object.values(SC)) { s.remove(rig); s.remove(mask); s.remove(board); s.remove(shadow); }
+    for (const s of Object.values(SC)) { s.remove(rig); s.remove(mask); s.remove(board); s.remove(shadow); s.remove(crash); }
+    if (f !== 'D' && el.dfront && dFrontOn) { dFrontOn = false; el.dfront.style.opacity = '0'; }
     SC[f].add(rig, mask, board);
     if (f === 'H') SC.H.add(shadow);
+    if (f === 'D') SC.D.add(shadow, crash);
     sizeCanvas();
   }
   // 1.5× is sharp and keeps the frame rate high (smoother than 2–3× native);
@@ -527,26 +623,32 @@ async function boot() {
       rig.scale.setScalar(1);
       clip.constant = -RIM_Y;                         // nothing below the cockpit rim: legs appear as they clear it
     } else {
-      /* IGMH: drops in from above and lands on his feet in front of the chair,
-         sits back into it, and works at his laptop until the end. */
+      /* Office: crashes through the Oncology department's ceiling, lands,
+         walks in through the doorway, behind the pillar, into the pharmacy,
+         and sits down at the counter to work. */
       const typeT = typeClock(dt);
+      const u = THREE.MathUtils.clamp(s.dW, 0, 1);
+      const Pd = curveD.getPointAt(u), Td = curveD.getTangentAt(u);
       setAct('land', s.tLand, s.wLand);
+      setAct('walk', (u * lenD / walkStride * walkDur) % walkDur, s.wWalkD);   // feet locked to the floor
       setAct('standToSit', s.tSTS, s.wSTS);
       setAct('typing', typeT, s.wType);
-      // travel from each clip's root curve, blended by weight; he lands FRONT
-      // in front of the seat and Stand To Sit carries him back into it
-      const [, zL] = rootAt('land', s.tLand);
-      const [, zS] = rootAt('standToSit', s.tSTS);
-      const wSum = s.wLand + s.wSTS + s.wType || 1;
-      const z = (s.wLand * (FRONT + zL) + s.wSTS * (FRONT + zS)) / wSum;
-      rig.position.set(SEAT.x, s.gyD, SEAT.z + z);
-      // the chair: swivels with him, and rocks as it takes his weight (3D only)
-      const seated = (s.wType + s.wSTS * THREE.MathUtils.smoothstep(s.tSTS, 1.3, 1.6)) / wSum;
-      gsap.set(el.chair, { yPercent: 0.7 * s.bump, rotation: -1.2 * s.bump });
+      setAct('idle', tClock % A.idle.getClip().duration, Math.max(0, 1 - s.wLand - s.wWalkD - s.wSTS - s.wType));
+      const seated = s.wType + s.wSTS * THREE.MathUtils.smoothstep(s.tSTS, 1.3, 1.6);
+      let yaw = lerpA(0, Math.atan2(Td.x, Td.z), s.turnD);
+      yaw = lerpA(yaw, 0, s.faceD);
       const swivel = (gsap.getProperty(el.chair, 'rotationY') || 0) * Math.PI / 180 * seated;
-      rig.rotation.set(0, swivel, THREE.MathUtils.degToRad(-1.2 * s.bump) * 0.6);
+      rig.position.set(Pd.x, s.gyD, Pd.z + s.wSTS * rootAt('standToSit', s.tSTS)[1] + s.wType * rootAt('standToSit', 2.23)[1]);
       rig.position.y -= 0.006 * s.bump;
-      clip.constant = -DESK_TOP_Y;                     // behind the desk
+      rig.rotation.set(0, yaw + swivel, THREE.MathUtils.degToRad(-1.2 * s.bump) * 0.6);
+      crashFx(actT - (act.labels.crash ?? 1e9));
+      const behind = rig.position.z < -5.75;
+      if (el.dfront && behind !== dFrontOn) { dFrontOn = behind; el.dfront.style.opacity = behind ? '1' : '0'; }
+      shadow.visible = !behind;
+      shadow.position.set(rig.position.x, 0.003, rig.position.z);
+      const air = Math.max(0, s.gyD) + Math.max(0, (hipsAt('land', 0) - 1) * s.wLand * (1 - THREE.MathUtils.smoothstep(s.tLand, 0, 0.33)));
+      shadow.scale.setScalar(1 + air * 0.4);
+      shadow.material.opacity = 0.5 / (1 + air * 1.2);
     }
 
     rig.rotation.y += spinStep(dt);                  // the visitor can spin him (drag sideways)
@@ -1222,7 +1324,7 @@ async function boot() {
   renderer.setAnimationLoop(loop);          // paced by the display, same tick as GSAP
 
   document.documentElement.classList.add('has-3d');
-  window.__hero3d = { FREE, face, renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B, rig,
+  window.__hero3d = { FREE, crash, curveD, face, renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B, rig,
     // for tooling (motion analysis): advance the pose by dt without the render loop
     step: (dt) => { tClock += dt; pose(dt); }, stop: () => renderer.setAnimationLoop(null) };
 }

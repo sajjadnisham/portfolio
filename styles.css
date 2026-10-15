@@ -450,3 +450,7 @@ html.lenis, html.lenis body { height: auto; }
 @keyframes cue-bob { 0%, 100% { transform: translateY(0); opacity: .45; } 50% { transform: translateY(7px); opacity: .25; } }
 @media (min-width: 1200px), (min-width: 560px) and (min-aspect-ratio: 13/10) { .scroll-cue { left: 24px; bottom: 9%; width: 26px; height: 42px; } }
 @media (prefers-reduced-motion: reduce) { .scroll-cue { animation: none; } }
+
+/* ---------- Office scene (Oncology + NURF Pharmacy) ---------- */
+.onc-front { opacity: 0; pointer-events: none; }        /* hero3d.js shows it while he's behind the wall/counter */
+.has-3d .chair, .has-3d .desk { display: none; }        /* (the 2D desk/chair are only for the no-3D fallback) */
