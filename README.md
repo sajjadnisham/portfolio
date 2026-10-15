@@ -74,6 +74,7 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
   - Each scene's acting eases in from standstill, and rewinds ease in and out.
   - Every bone is re-posed from the clips each frame before IK, look-at and smoothing are applied (`freshPose`). three.js's mixer skips bones whose animated value didn't change, which let last frame's edits feed back and jitter.
   - `window.__hero3d.step(dt)` advances the pose without the render loop, for frame-by-frame motion analysis.
+  - The cartoon draws in about 25 calls instead of ~75: every non-moving rigid part (fingers, shoes, hair, beard, coat details…) is baked into one skinned mesh per material, each vertex fully on its bone. Only the live face pieces (lids, brows, mouth) stay separate. This helps phones hold a steady frame rate.
   - Clip playback never changes speed mid-move: the plane leap eases into one steady pace, the office landing eases into motion, and the clipboard catch is a soft give rather than a twitch (found by measuring jerk frame by frame).
   - The head's follow-through uses filtered body acceleration, so it never jitters.
   - Shaders are compiled at load, so switching scenes doesn't hitch.
