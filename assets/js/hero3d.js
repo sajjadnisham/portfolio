@@ -252,10 +252,10 @@ async function boot() {
   const camD = paintedCamera(941, 1672, 1061, 671, 1.6);
   const toXD = (u, d) => (u - 470.5) * d / 1061;
   const CEIL = 2.7;                                                    // the department room's ceiling (m)
-  const LANDD = V3(toXD(232, 12), 0, -12);                            // inside the Oncology Department, seen through its open door
+  const LANDD = V3(toXD(205, 10), 0, -10);                            // inside the Oncology Department, seen through its open door
   const STANDD = V3(toXD(486, 6.0), 0, -6.0);                         // at the counter, between the monitors
   // out through the doorway, behind the pillar, into the pharmacy
-  const curveD = new THREE.CatmullRomCurve3([LANDD, V3(-2.25, 0, -9.6), V3(-1.8, 0, -7.6), V3(-1.55, 0, -6.8),
+  const curveD = new THREE.CatmullRomCurve3([LANDD, V3(-2.1, 0, -8.7), V3(-1.8, 0, -7.6), V3(-1.55, 0, -6.8),
     V3(-1.0, 0, -6.8), V3(-0.4, 0, -6.95), STANDD], false, 'centripetal');
   const lenD = curveD.getLength();
   // walking pace along it: a smooth start, an even stride, a smooth stop (the
@@ -304,8 +304,12 @@ async function boot() {
   const FALL = { y0: 4.0, keep: 0.6 };                                 // start height (S3D.gyD) · speed kept through the boards
   const vCeil = Math.sqrt(2 * G * (FALL.y0 - CEIL)), vThru = vCeil * FALL.keep;
   const T_FLOOR = (-vThru + Math.sqrt(vThru * vThru + 2 * G * CEIL)) / G;   // ceiling → floor (s)
+  // he still carries the leap's forward speed: 1.5 m/s toward us through the
+  // fall, then a short skid (constant deceleration) as his feet take the landing
+  const V_FWD = 1.5, SKID = 0.25, SKID_D = V_FWD * SKID / 2;
+  const driftZ = (t) => (t < T_FLOOR ? -(V_FWD * (T_FLOOR - t) + SKID_D) : t < T_FLOOR + SKID ? -(V_FWD / (2 * SKID)) * (T_FLOOR + SKID - t) ** 2 : 0);
   const crash = new THREE.Group();
-  const HOLE_C = V3(LANDD.x, CEIL, LANDD.z);
+  const HOLE_C = V3(LANDD.x, CEIL, LANDD.z + driftZ(0));
   const REC = 60, SIM = 240, DUR = 4.5, NREC = Math.round(DUR * REC) + 1;
   const UP = V3(0, 1, 0);
   // the stable resting pose nearest to q: lying on one of its broad faces (a
@@ -373,7 +377,7 @@ async function boot() {
   {
     let seed = 11;
     const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    const boardM = new THREE.MeshStandardMaterial({ color: 0xeceae4, roughness: 0.95 });
+    const boardM = new THREE.MeshStandardMaterial({ color: 0xe2ded6, roughness: 0.95 });
     const coreM = new THREE.MeshStandardMaterial({ color: 0xcfc8bb, roughness: 1 });
     // the hole: inside walls and the dark void above (a prism seen from inside),
     // and the torn, lighter edge of the boards around it
@@ -388,7 +392,8 @@ async function boot() {
     crash.userData.hole = [hole, rim];
     // falling pieces: board shards, chunks, crumbs
     const bits = [];
-    const spec = [[5, 0.10, 0.20, 0.007, 0.012, 0.03, 0.2, 1.2], [16, 0.03, 0.08, 0.007, 0.012, 0.025, 0.25, 2], [16, 0.008, 0.02, 0.006, 0.016, 0.02, 0.3, 3]];
+    const shadowG = new THREE.PlaneGeometry(1, 1), shadowT = radialTexture();   // soft contact shadow under each piece
+    const spec = [[5, 0.10, 0.20, 0.007, 0.012, 0.03, 0.2, 1.2], [16, 0.03, 0.08, 0.007, 0.012, 0.025, 0.25, 2], [28, 0.006, 0.02, 0.005, 0.014, 0.02, 0.3, 3]];
     for (const [n, s0, s1, t0, t1, drag, e, tip] of spec) {
       for (let i = 0; i < n; i++) {
         const hx = s0 + rnd() * (s1 - s0), hz = s0 + rnd() * (s1 - s0), hy = t0 + rnd() * (t1 - t0);
@@ -396,14 +401,17 @@ async function boot() {
         const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 0.42;
         const p = V3(HOLE_C.x + Math.cos(a) * r, CEIL - hy, HOLE_C.z + Math.sin(a) * r);
         const push = 1 - r / 0.5;                                        // the middle is driven down hardest by him
-        const v = V3(Math.cos(a), 0, Math.sin(a)).multiplyScalar(0.25 + rnd() * 0.9);
+        const v = V3(Math.cos(a), 0, Math.sin(a)).multiplyScalar(0.25 + rnd() * 0.8);
+        v.z += V_FWD * (0.4 + 0.6 * push);                               // carried forward with him
         v.y = -(0.6 + push * vCeil * (0.35 + rnd() * 0.35));
         const w = V3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).multiplyScalar(n === 5 ? 9 : 22);
         const q = new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, rnd() * 6.28, (rnd() - 0.5) * 0.3));
         const delay = (1 - push) * 0.06 + rnd() * 0.03;
         const sim = simulate({ p, v, w, q, half: V3(hx, hy, hz), drag, e, mu: 0.5, tip });
         m.visible = false; crash.add(m);
-        bits.push({ m, sim, delay, big: n === 5 });
+        const sh = new THREE.Mesh(shadowG, new THREE.MeshBasicMaterial({ map: shadowT, transparent: true, depthWrite: false, opacity: 0 }));
+        sh.rotation.x = -Math.PI / 2; sh.scale.setScalar(Math.max(hx, hz) * 3.2); sh.visible = false; crash.add(sh);
+        bits.push({ m, sh, sim, delay, big: n === 5 });
       }
     }
     crash.userData.bits = bits;
@@ -465,11 +473,14 @@ async function boot() {
     for (const b of crash.userData.bits) {
       const x = (t - b.delay) * REC;
       b.m.visible = x > 0;
-      if (x <= 0) continue;
+      if (x <= 0) { b.sh.visible = false; continue; }
       const [i, f] = sample(null, 0, x), P = b.sim.P, Q = b.sim.Q;
       b.m.position.set(P[i * 3] + (P[i * 3 + 3] - P[i * 3]) * f, P[i * 3 + 1] + (P[i * 3 + 4] - P[i * 3 + 1]) * f, P[i * 3 + 2] + (P[i * 3 + 5] - P[i * 3 + 2]) * f);
       qa.fromArray(Q, i * 4); qb.fromArray(Q, i * 4 + 4);
       b.m.quaternion.slerpQuaternions(qa, qb, f);
+      b.sh.visible = true;
+      b.sh.position.set(b.m.position.x, 0.002, b.m.position.z);
+      b.sh.material.opacity = 0.55 * THREE.MathUtils.clamp(1 - b.m.position.y / 1.4, 0, 1) ** 2;
     }
     for (const fl of crash.userData.flaps) {
       const x = t * REC, [i, f] = sample(null, 0, x);
@@ -783,6 +794,7 @@ async function boot() {
       yaw = lerpA(yaw, 0, s.faceD);
       const swivel = (gsap.getProperty(el.chair, 'rotationY') || 0) * Math.PI / 180 * seated;
       rig.position.set(Pd.x, s.gyD, Pd.z + s.wSTS * rootAt('standToSit', s.tSTS)[1] + s.wType * rootAt('standToSit', 2.23)[1]);
+      rig.position.z += driftZ(actT - (act.labels.crash ?? -1e9));   // forward momentum through the fall and the skid
       rig.position.y -= 0.006 * s.bump;
       rig.rotation.set(0, yaw + swivel, THREE.MathUtils.degToRad(-1.2 * s.bump) * 0.6);
       crashFx(actT - (act.labels.crash ?? 1e9));

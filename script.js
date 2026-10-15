@@ -15,7 +15,7 @@
      0.1  S2  Portrait + experience
      1.75 S3  Mission Hospital      turns away, walks into the hospital, turns back
      3.7  S4  COVID mask            pulls the mask from his pocket onto his face
-     5.1  S5  NABH                  catches the file, "(NABH)" reveal
+     5.1  S5  NABH                  catches the file
      7.1  S6  Flight to Maldives
      8.95 S7  NURF Pharmacy, IGMH   jumps out of the plane, falls into his chair
     11.6  S8  Responsibilities      chair swivel; the duties appear and stay
@@ -88,7 +88,6 @@
 
   const setA = $('.set-a');
   const bgHosp = $('.bg-hosp');
-  const word = $('.nabh-word');
 
   const walk = $$('.walk');             // back-view walk frames
   const hero = $('.hero');              // acting: walk scale / bob / sway / turn
@@ -139,7 +138,6 @@
   gsap.set($$('.rule'), { scaleX: 0 });
 
   gsap.set([bgHosp, pharmDoor, portraitWrap, ambA, ambB, fx, shade], { opacity: 0 });
-  gsap.set(word, { clipPath: 'inset(0% 100% 0% 0%)' });
   gsap.set(portraitWrap, { xPercent: 25 * M, scale: 1 + 0.08 * M, transformOrigin: '86% 57%' });
   gsap.set(portrait, { transformOrigin: '86% 57%' });                       // face centre
   // Where the figure stands in each frame (canvas px): feet centre, feet line, height.
@@ -533,8 +531,6 @@
 
   /* S5 · NABH */
   tl.to(journey, { y: () => (G.desk ? 0 : -G.vh * 0.05), duration: 0.6, ease: 'power2.inOut' }, 5.2);
-  // "(NABH)" appears one character at a time (6 glyphs → 6 steps)
-  tl.to(word, { clipPath: 'inset(0% 0% 0% 0%)', duration: 0.6, ease: 'steps(6)' }, 5.95);
   reveal(lines($('.nabh', journey)), 6.2);
 
   /* S6 · Flight to the Maldives */
@@ -562,7 +558,7 @@
   tl.to(ticker, { opacity: 1, y: 0, duration: 0.4 }, 11.8);
 
   // each responsibility slides in and stays, until the Connect page takes over
-  const T0 = 11.95, TSTEP = 0.42;
+  const T0 = 11.95, TSTEP = 0.36;   // nine duties, all in before the Connect page (15.2)
   items.forEach((li, i) => {
     tl.to(li, { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out' }, T0 + i * TSTEP);
   });
