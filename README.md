@@ -85,7 +85,12 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
   - A three-stage pose filter (critically damped, ~21 ms per stage) eases every bone toward its target. The pose, its speed and its acceleration all change continuously, so nothing jolts at blends, loop seams or IK changes (`smoothPose`).
   - His walking heading is averaged over ±0.4 m of the path (`headingAt`), so he turns into bends at a continuous rate instead of twitching where the spline passes a control point.
   - The clipboard catch is soft: his reach blends in and out, the board arrives at 60% of its flight speed, and it's carried to his chest with an even ease.
-  - Each scene's acting eases in from standstill, and rewinds ease in and out.
+  - **Scroll-driven acting never lurches.** One driver plays the acting toward the moment the scroll asks for (`drive` in `script.js`), and its pace only changes gradually (bounded acceleration, 2.6× per second):
+    - natural speed (1×) for the moment you're on;
+    - at most 1.6× when you've scrolled on before he finished the previous moment (it used to snap to 3×);
+    - up to 2.2× when rewinding, braking smoothly into the target.
+    
+    In a simulated visitor's scroll pattern, the acting's top speed fell from 6.6× to 1.65×.
   - Every bone is re-posed from the clips each frame before IK, look-at and smoothing are applied (`freshPose`). three.js's mixer skips bones whose animated value didn't change, which let last frame's edits feed back and jitter.
   - `window.__hero3d.step(dt)` advances the pose without the render loop, for frame-by-frame motion analysis.
   - The cartoon draws in about 25 calls instead of ~75: every non-moving rigid part (fingers, shoes, hair, beard, coat details…) is baked into one skinned mesh per material, each vertex fully on its bone. Only the live face pieces (lids, brows, mouth) stay separate. This helps phones hold a steady frame rate.
@@ -112,6 +117,7 @@ Once he's at the counter window, the whole scene eases in about 28% (20% on desk
 - **tap a shelf:** he walks over (accelerating, braking to a stop, turning at a limited rate, feet locked to the floor), turns, reaches up, takes the medicine kept there and turns back to show a card: what it's used for, the usual adult dose and a pharmacist's tip. There are eight medicines (paracetamol, amoxicillin, metformin, amlodipine, omeprazole, cetirizine, salbutamol, EPO); edit `MEDS` in `hero3d.js`. "Put it back" returns it to the shelf.
 - **drag him:** he's picked up and hangs from the pointer on a spring, swinging as you move. Let go and he falls under gravity (with a little air drag; the walls bounce him back), squashes on impact and gets up.
 - If he was sitting, he stands up first. Scrolling to the next moment hands him back to the story with a short blend.
+- **The same play works in the NURF Pharmacy** once he's at his laptop. There the shelves hold eight nephrology and urology medicines (`MEDS_NURF` in `hero3d.js`): tamsulosin, finasteride, solifenacin, potassium citrate, EPO, sevelamer, calcitriol and tacrolimus. After he puts one back (or after he's dropped), he walks back to his place at the counter, sits down and goes back to typing. Each pharmacy is described once in `ZONES` (camera, shelf wall, where he can walk, its medicines).
 
 ## The office scene
 
