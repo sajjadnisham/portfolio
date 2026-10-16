@@ -533,8 +533,12 @@ async function boot() {
   /* ---------- hosts (DOM layers the canvas moves between) ---------- */
   const hosts = { H: el.hostH, P: el.hostP, D: el.hostD };
   let frame = null;
+  // his visibility: script.js dips it for a jump in the acting (vis.jump); a
+  // scene switch fades him in (vis.sw). Applied once per frame (loop).
+  const vis = { jump: 1, sw: 1 };
   function useFrame(f) {
     if (f === frame) return;
+    if (frame && !RM_CRASH) { gsap.killTweensOf(vis, 'sw'); vis.sw = 0; gsap.to(vis, { sw: 1, duration: 0.3, ease: 'sine.out' }); }   // arrives in the new scene softly
     frame = f;
     hosts[f].appendChild(canvas);
     for (const s of Object.values(SC)) { s.remove(rig); s.remove(mask); s.remove(board); s.remove(shadow); s.remove(crash); }
@@ -740,7 +744,8 @@ async function boot() {
     const scrollT = tl.time();
     const actT = act.time();
     // a fast scroll can jump the acting ahead: blend into the new pose instead of snapping
-    if (lastActT !== null && Math.abs(actT - lastActT) > 0.3) jumpBlend = 1;
+    if (forceSnap) jumpBlend = 0;                    // a jump made while he was faded out: just be there
+    else if (lastActT !== null && Math.abs(actT - lastActT) > 0.3) jumpBlend = 1;
     lastActT = actT;
     jumpBlend *= Math.exp(-dt * 3.5);
     const J = act.labels.files;
@@ -830,7 +835,7 @@ async function boot() {
 
     rig.rotation.y += spinStep(dt);                  // the visitor can spin him (drag sideways)
     // after a jump (same scene), his position eases over too
-    if (f === lastFrame && dt > 0 && dt <= 0.25 && jumpBlend > 0.01) {
+    if (f === lastFrame && dt > 0 && dt <= 0.25 && jumpBlend > 0.01 && !forceSnap) {
       const k = 1 - Math.exp(-dt / (0.045 + 0.3 * jumpBlend));
       rig.position.lerpVectors(prevRigP, rig.position, k);
       rig.quaternion.copy(prevRigQ.clone().slerp(rig.quaternion, k));
@@ -841,7 +846,8 @@ async function boot() {
     avatar.updateMatrixWorld(true);
     rig.updateMatrixWorld(true);
 
-    const snap = f !== lastFrame || dt <= 0 || dt > 0.25;   // new scene / first frame / resumed tab
+    const snap = forceSnap || f !== lastFrame || dt <= 0 || dt > 0.25;   // jump while hidden / new scene / first frame / resumed tab
+    if (forceSnap) { haveHip = false; forceSnap = false; }
     lastFrame = f;
     if (f === 'H') { if (FREE.on) freeHands(); else handsHospital(s); }
     if (f === 'D' && FREE.on) freeHands();
@@ -1141,7 +1147,7 @@ async function boot() {
     if (v === frontOn) return;
     frontOn = v; el.front.style.opacity = v ? '1' : '0';
   }
-  let lastActT = null, jumpBlend = 0;
+  let lastActT = null, jumpBlend = 0, forceSnap = false;
   const prevRigP = new THREE.Vector3(), prevRigQ = new THREE.Quaternion();
 
   /* ---------- he reacts to the visitor: cursor / touch ---------- */
@@ -1519,7 +1525,7 @@ async function boot() {
     const st = document.documentElement.style;
     st.setProperty('--px', par.x.toFixed(4)); st.setProperty('--py', par.y.toFixed(4));
   }
-  let dtS = 0, timeDebt = 0;
+  let dtS = 0, timeDebt = 0, lastOp = 1;
   function loop() {
     if (!running) return;
     // Frame timing on phones is irregular (16.7 ms frames arriving as 12 / 21 ms
@@ -1535,6 +1541,8 @@ async function boot() {
     parallax(dt);
     pose(dt);
     const cam = frame === 'H' ? camH : frame === 'D' ? camD : camP;
+    const op = Math.max(0, Math.min(1, vis.jump * vis.sw));
+    if (op !== lastOp) { canvas.style.opacity = op === 1 ? '' : op.toFixed(3); lastOp = op; }
     renderer.render(SC[frame], cam);
     adapt(dt);
   }
@@ -1556,7 +1564,9 @@ async function boot() {
   renderer.setAnimationLoop(loop);          // paced by the display, same tick as GSAP
 
   document.documentElement.classList.add('has-3d');
-  window.__hero3d = { FREE, crash, curveD, face, renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B, rig,
+  // script.js calls this when it jumps the acting while he's faded out
+  const snapNext = () => { forceSnap = true; };
+  window.__hero3d = { vis, snapNext, FREE, crash, curveD, face, renderer, avatar, A, camH, camD, camP, MARK, P0, SEAT, mask, board, B, rig,
     // for tooling (motion analysis): advance the pose by dt without the render loop
     step: (dt) => { tClock += dt; pose(dt); }, stop: () => renderer.setAnimationLoop(null) };
 }

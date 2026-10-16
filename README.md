@@ -91,6 +91,11 @@ Between moments he is never frozen: idle, piloting and sitting loops keep runnin
     - up to 2.2× when rewinding, braking smoothly into the target.
     
     In a simulated visitor's scroll pattern, the acting's top speed fell from 6.6× to 1.65×.
+  - **Scrolling back never plays scenes in reverse.**
+    - A short rewind within the same scene (up to 1.2 s of acting) eases back.
+    - A longer rewind, a rewind into another scene, or skipping ahead past whole moments dips him out (0.12 s). The acting jumps while he's invisible, the pose filters and springs reset so nothing slides or wobbles, and he fades back in already in place (`jumpTo` in `script.js`, `snapNext` in `hero3d.js`).
+    - Before this, rewinds ran the leap, the fall and the walk backwards at speed, and a long jump slid him across the room.
+  - **Scene switches fade him in** over 0.3 s (pharmacy ↔ plane ↔ NURF), instead of popping. Both fades go through one visibility value (`vis`), so they never fight.
   - Every bone is re-posed from the clips each frame before IK, look-at and smoothing are applied (`freshPose`). three.js's mixer skips bones whose animated value didn't change, which let last frame's edits feed back and jitter.
   - `window.__hero3d.step(dt)` advances the pose without the render loop, for frame-by-frame motion analysis.
   - The cartoon draws in about 25 calls instead of ~75: every non-moving rigid part (fingers, shoes, hair, beard, coat details…) is baked into one skinned mesh per material, each vertex fully on its bone. Only the live face pieces (lids, brows, mouth) stay separate. This helps phones hold a steady frame rate.

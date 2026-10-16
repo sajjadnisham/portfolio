@@ -480,6 +480,26 @@
     act.time(nt);
   });
   function clampN(x, a, b) { return x < a ? a : x > b ? b : x; }
+  // which painted scene a moment of the acting belongs to
+  const sceneOf = (t) => (t < act.labels.files ? 0 : t < act.labels.files + 0.75 ? 1 : 2);
+  // A jump in the acting (a long rewind, or skipping ahead past whole moments)
+  // is never shown as motion: he dips out (0.12 s), the acting jumps while he's
+  // invisible, and he fades back in already in place. (Playing it would mean
+  // watching scenes run backwards at speed, or sliding him through walls.)
+  let jumpT = null;
+  function jumpTo(t) {
+    const H = window.__hero3d;
+    if (!H || !H.vis || RM) { act.seek(t); drive.v = 0; return; }
+    const pending = jumpT !== null;
+    jumpT = t;
+    if (pending) return;                               // already fading: it'll land on the latest target
+    drive.off = true;
+    gsap.to(H.vis, { jump: 0, duration: 0.12, ease: 'sine.in', overwrite: 'auto', onComplete: () => {
+      act.seek(jumpT); jumpT = null; drive.v = 0; drive.off = false;
+      if (H.snapNext) H.snapNext();
+      gsap.to(H.vis, { jump: 1, duration: 0.24, ease: 'sine.out', overwrite: 'auto' });
+    } });
+  }
   function direct(t) {
     let want = 'start';
     for (const [at, name] of CUES) if (t >= at) want = name;
@@ -491,11 +511,19 @@
     const order = ['start', ...CUES.map((c) => c[1])];
     const iTo = order.indexOf(want), iFrom = order.indexOf(prevCue);
     prevCue = want;
+    const now = jumpT !== null ? jumpT : act.time();
+    if (to < now) {
+      // scrolling back: a short rewind within the scene eases back (the
+      // driver brakes into it); anything longer, or into another scene, jumps
+      if (now - to > 1.2 || sceneOf(to) !== sceneOf(now)) jumpTo(to);
+      drive.goal = to; drive.base = 0;
+      return;
+    }
     // Skipping ahead past whole scenes: jump to the start of the target moment
     // and play just that one, so a fast scroll never shows an earlier scene's
     // props (the plane, the clipboard…) lingering over a later page.
     const base = act.labels[order[iTo - 1]] ?? 0;          // where the target moment starts
-    if (iTo - iFrom > 1 && act.time() < base) { act.seek(base); drive.v = Math.min(drive.v, 0.5); }
+    if (iTo - iFrom > 1 && now < base) jumpTo(base);
     drive.goal = to; drive.base = base;
   }
 
