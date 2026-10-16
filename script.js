@@ -459,7 +459,27 @@
   let cue = 'start';
   let introReady = false;
   let prevCue = 'start';
-  let playing = null;
+  // One driver plays the acting toward the moment the scroll asks for. Its
+  // speed only ever changes gradually (bounded acceleration), so his motion
+  // never lurches when you scroll: natural pace (1×) for the moment you're
+  // on; if you've already scrolled on while he's still finishing the previous
+  // moment, it eases up to at most 1.6× to catch up (it used to snap to 3×);
+  // scrolling back rewinds at up to 2.2×, braking smoothly into the target.
+  const drive = { goal: 0, v: 0, base: 0, off: false };
+  const ACC = 2.6;                                   // how fast the pace may change (× per second)
+  gsap.ticker.add((time, deltaMs) => {
+    if (drive.off) return;
+    const dt = Math.min(deltaMs / 1000, 0.1);
+    const t = act.time(), d = Math.min(drive.goal, act.duration()) - t;   // (a label can sit just past the last tween)
+    if (Math.abs(d) < 1e-4) { drive.v = 0; return; }
+    const brake = Math.sqrt(2 * 5 * Math.abs(d));       // never overshoot: slow down near the goal
+    const want = d > 0 ? Math.min(t < drive.base - 0.05 ? 1.6 : 1, Math.max(0.25, brake)) : -Math.min(2.2, Math.max(0.25, brake));
+    drive.v += clampN(want - drive.v, -ACC * dt, ACC * dt);
+    let nt = t + drive.v * dt;
+    if ((d > 0 && nt >= t + d) || (d < 0 && nt <= t + d)) { nt = t + d; drive.v = 0; }
+    act.time(nt);
+  });
+  function clampN(x, a, b) { return x < a ? a : x > b ? b : x; }
   function direct(t) {
     let want = 'start';
     for (const [at, name] of CUES) if (t >= at) want = name;
@@ -467,36 +487,16 @@
     if (want === cue) return;
     cue = want;
     const to = act.labels[want];
-    if (RM) { act.seek(to); return; }
+    if (RM) { act.seek(to); drive.goal = to; drive.v = 0; return; }
     const order = ['start', ...CUES.map((c) => c[1])];
     const iTo = order.indexOf(want), iFrom = order.indexOf(prevCue);
     prevCue = want;
-    const wasMoving = !!(playing && playing.isActive());
-    if (playing) { gsap.killTweensOf(playing); playing.kill(); }
     // Skipping ahead past whole scenes: jump to the start of the target moment
     // and play just that one, so a fast scroll never shows an earlier scene's
     // props (the plane, the clipboard…) lingering over a later page.
     const base = act.labels[order[iTo - 1]] ?? 0;          // where the target moment starts
-    if (iTo - iFrom > 1 && act.time() < base) act.seek(base);
-    const now = act.time();
-    if (to < now) {
-      // scrolling back up: a quick rewind that eases in and out
-      playing = act.tweenTo(to, { duration: Math.min((now - to) / 2.5, 1.2), ease: 'sine.inOut' });
-      return;
-    }
-    if (now < base - 0.05) {
-      // still finishing the previous moment: fast-forward the rest, then play this one
-      playing = gsap.timeline()
-        .add(act.tweenTo(base, { duration: Math.min((base - now) / 3, 1), ease: 'none' }))
-        .add(act.tweenTo(to, { duration: to - base, ease: 'none' }));
-    } else {
-      playing = act.tweenTo(to, { duration: to - now, ease: 'none' });   // natural speed
-    }
-    // start moving gently (from standstill), or keep the pace if he was already moving
-    if (!wasMoving) {
-      playing.timeScale(0.15);
-      gsap.to(playing, { timeScale: 1, duration: 0.35, ease: 'sine.in' });
-    }
+    if (iTo - iFrom > 1 && act.time() < base) { act.seek(base); drive.v = Math.min(drive.v, 0.5); }
+    drive.goal = to; drive.base = base;
   }
 
   /* =========================================================
@@ -610,7 +610,8 @@
   // hand the timelines to the 3D avatar module (assets/js/hero3d.js)
   window.__story = {
     S3D, tl, act, G,
-    busy: () => !!(playing && playing.isActive()),   // is the acting playing a scripted moment?
+    drive,
+    busy: () => Math.abs(Math.min(drive.goal, act.duration()) - act.time()) > 1e-3,   // is the acting playing a scripted moment?
     version: document.documentElement.dataset.v || '',
     el: { dfront: $('.onc-front'), front: $('.pharm-front'), door: pharmDoor, hostH: $('.host-h'), hostP: $('.host-p'), hostD: $('.host-d'), portraitWrap, chair },
   };

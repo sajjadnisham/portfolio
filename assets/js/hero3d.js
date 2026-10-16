@@ -282,6 +282,10 @@ async function boot() {
     return (t) => { const x = THREE.MathUtils.clamp(t, 0, 1) * N, i = Math.min(N - 1, Math.floor(x)); return (f[i] + (f[i + 1] - f[i]) * (x - i)) / tot; };
   })();
   const SEAT = STANDD.clone(); SEAT.z += rootAt('standToSit', 2.23)[1];   // (where he ends up sitting)
+  // the NURF Pharmacy's shelf wall behind the counter (~7.6 m), and the window
+  // in front of it (canvas columns 341–815), for free play
+  const SHELF_ZD = -7.6;
+  const WIND = { x0: toXD(350, 6.6), x1: toXD(805, 6.6) };
   // Aeroplane: orthographic, flight frame is 675×565 units, 300 units per metre.
   const PXM = 280;
   // the cockpit canvas reaches well past the plane (see .host-p) so the leap stays in view
@@ -538,6 +542,7 @@ async function boot() {
     SC[f].add(rig, mask, board);
     if (f === 'H') SC.H.add(shadow);
     if (f === 'D') SC.D.add(shadow, crash);
+    if (f === 'H' || f === 'D') SC[f].add(medBox);
     sizeCanvas();
   }
   // 1.5× is sharp and keeps the frame rate high (smoother than 2–3× native);
@@ -751,7 +756,7 @@ async function boot() {
     board.visible = false;
 
     if (f === 'H') {
-      if (FREE.on && !freeAllowed()) freeExit();
+      if (FREE.on && (FREE.zone !== 'H' || !freeAllowed())) freeExit();
       if (FREE.on) {
         freePose(dt);
       } else {
@@ -790,7 +795,10 @@ async function boot() {
       rig.rotation.set(0, 0.35, 0);
       rig.scale.setScalar(1);
       clip.constant = -RIM_Y;                         // nothing below the cockpit rim: legs appear as they clear it
+    } else if (FREE.on && FREE.zone === 'D' && freeAllowed()) {
+      freePose(dt);                                       // playing in the NURF Pharmacy
     } else {
+      if (FREE.on && FREE.zone === 'D') freeExit();
       /* Office: crashes through the ceiling inside the Oncology Department,
          lands, walks out through its doorway, behind the pillar, into the pharmacy,
          and sits down at the counter to work. */
@@ -836,12 +844,14 @@ async function boot() {
     const snap = f !== lastFrame || dt <= 0 || dt > 0.25;   // new scene / first frame / resumed tab
     lastFrame = f;
     if (f === 'H') { if (FREE.on) freeHands(); else handsHospital(s); }
+    if (f === 'D' && FREE.on) freeHands();
     if (f !== 'H') setFront(false);
     lookAtPointer(s, dt, f);
     respond(s, dt, f);
     smoothPose(dt, snap);
     avatar.updateMatrixWorld(true);
     if (f === 'H') { placeMask(s); placeBox(); }
+    if (f === 'D') placeBox();
     face.set(blink(tClock), Math.max(s.smile, smileBoost > 0 ? Math.min(1, smileBoost * 2) : 0));
     face.masked(f === 'H' && mask.visible && s.mc > 0.55);
   }
@@ -862,10 +872,32 @@ async function boot() {
     { name: 'Salbutamol inhaler', col: 0x5a6fd6, use: 'Quick relief of asthma symptoms.', dose: '1–2 puffs when needed.', tip: 'Shake, breathe out, then press and breathe in slowly; hold for 10 seconds.' },
     { name: 'Erythropoietin (EPO)', col: 0xd94f8a, use: 'Anaemia in kidney disease and dialysis.', dose: 'Injected; the dose depends on body weight and haemoglobin.', tip: 'Keep it in the fridge (2–8 °C) and never freeze it.' },
   ];
-  const FREE = { on: false, mode: 'idle', t: 0, pos: V3(0, 0, 0), vel: V3(0, 0, 0), yaw: 0, yawT: 0, v: 0, phase: 0,
+  // NURF Pharmacy (Urology Department, IGMH): nephrology and urology medicines
+  const MEDS_NURF = [
+    { name: 'Tamsulosin 400 mcg', col: 0x2f7fd8, use: 'Urinary symptoms of an enlarged prostate (BPH); also helps pass ureteric stones.', dose: '400 mcg once a day, about 30 minutes after the same meal each day.', tip: 'It can make you dizzy when you stand up: get up slowly. Tell your eye surgeon you take it before cataract surgery.' },
+    { name: 'Finasteride 5 mg', col: 0x3aa76d, use: 'Shrinks an enlarged prostate (BPH) over time.', dose: '5 mg once a day.', tip: 'Full effect takes about 6 months. Women who are or may be pregnant should not handle crushed or broken tablets.' },
+    { name: 'Solifenacin 5 mg', col: 0x8e5cc9, use: 'Overactive bladder: urgency, frequency and leaking.', dose: '5 mg once a day (up to 10 mg).', tip: 'Dry mouth and constipation are common: sip water and eat fibre.' },
+    { name: 'Potassium citrate', col: 0xf0a12b, use: 'Prevents kidney stones (calcium oxalate and uric acid).', dose: 'As prescribed, usually two or three times a day with meals.', tip: 'Take with meals and plenty of water; swallow tablets whole.' },
+    { name: 'Erythropoietin (EPO)', col: 0xd94f8a, use: 'Anaemia in chronic kidney disease and dialysis.', dose: 'Injected; the dose depends on body weight and haemoglobin.', tip: 'Keep it in the fridge (2–8 °C) and never freeze it.' },
+    { name: 'Sevelamer 800 mg', col: 0x22a8b5, use: 'High phosphate in kidney failure and dialysis.', dose: '800–1600 mg three times a day, with meals.', tip: 'Take it with meals: it binds the phosphate in your food.' },
+    { name: 'Calcitriol 0.25 mcg', col: 0xe8473c, use: 'Active vitamin D for bone health and high parathyroid hormone in kidney disease.', dose: '0.25 mcg a day or on alternate days, adjusted to blood calcium.', tip: 'Calcium is checked regularly; avoid extra calcium or vitamin D unless advised.' },
+    { name: 'Tacrolimus', col: 0x5a6fd6, use: 'Prevents rejection after a kidney transplant.', dose: 'Twice a day, 12 hours apart; the dose is set by blood levels.', tip: 'Take it at the same times every day, the same way with food; avoid grapefruit.' },
+  ];
+  /* Where free play can happen: the Mission Hospital pharmacy (H) and the NURF
+     Pharmacy (D). Each has its camera, the shelf wall, where he can walk, its
+     medicines, and how to tell he's sitting. In the NURF Pharmacy he walks back
+     to his place at the counter and sits down to work again after putting a
+     medicine back. */
+  const ZONES = {
+    H: { cam: camH, shelfZ: SHELF_Z, win: WIN, meds: MEDS, bound: { x0: WIN.x0, x1: WIN.x1, z0: SHELF_Z + 0.55, z1: WALL_Z - 0.4 },
+      ready: () => S3D.inside > 0.98, seated: () => S3D.wSitH + S3D.wSitL > 0.5, home: null },
+    D: { cam: camD, shelfZ: SHELF_ZD, win: WIND, meds: MEDS_NURF, bound: { x0: WIND.x0 + 0.15, x1: WIND.x1 - 0.25, z0: SHELF_ZD + 0.55, z1: -6.2 },
+      ready: () => S3D.wType > 0.98, seated: () => S3D.wType + S3D.wSTS > 0.5, home: STANDD },
+  };
+  const Z = () => ZONES[FREE.zone || frame] || ZONES.H;
+  const FREE = { on: false, zone: null, mode: 'idle', t: 0, pos: V3(0, 0, 0), vel: V3(0, 0, 0), yaw: 0, yawT: 0, v: 0, phase: 0,
     target: null, next: null, reachP: null, med: -1, carryOff: V3(0, 0, 0), handW: 0, hasBox: false, used: false, reachT: 0, tilt: 0, after: null };
-  const BOUND = { x0: WIN.x0, x1: WIN.x1, z0: SHELF_Z + 0.55, z1: WALL_Z - 0.4 };
-  const freeAllowed = () => frame === 'H' && S3D.inside > 0.98 && !(story.busy && story.busy());
+  const freeAllowed = () => !!ZONES[frame] && ZONES[frame].ready() && !(story.busy && story.busy());
 
   // the medicine box he takes
   const medBox = new THREE.Group();
@@ -873,7 +905,7 @@ async function boot() {
   medBox.add(new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.08, 0.045), medMat));
   medBox.add(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.03, 0.047), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 })));
   medBox.visible = false;
-  SC.H.add(medBox);
+  SC.H.add(medBox);                                 // (moved into the NURF scene when he's there: useFrame)
 
   // the medicine card ("ask about it")
   const card = document.createElement('div');
@@ -891,7 +923,7 @@ async function boot() {
   card.querySelector('.medcard-back').addEventListener('click', putBack);
   card.querySelector('.medcard-x').addEventListener('click', putBack);
   function showCard(i) {
-    const m = MEDS[i];
+    const m = Z().meds[i];
     card.querySelector('h3').textContent = m.name;
     card.querySelector('.m-use').textContent = m.use;
     card.querySelector('.m-dose').textContent = m.dose;
@@ -903,20 +935,21 @@ async function boot() {
 
   function freeEnter() {
     if (FREE.on) return;
-    FREE.on = true; FREE.used = true;
+    FREE.on = true; FREE.used = { ...(FREE.used || {}), [frame]: true }; FREE.zone = frame;   // (the hint shows once per pharmacy)
     FREE.pos.copy(rig.position); FREE.pos.y = Math.max(0, FREE.pos.y);
     FREE.yaw = FREE.yawT = rig.rotation.y;
     FREE.vel.set(0, 0, 0); FREE.v = 0; FREE.t = 0; FREE.after = null;
-    FREE.mode = S3D.wSitH + S3D.wSitL > 0.5 ? 'stand' : 'idle';
+    FREE.mode = ZONES[frame].seated() ? 'stand' : 'idle';
     if (FREE.mode === 'stand') FREE.pos.y = 0;
     jumpBlend = 1;                                   // blend out of the scripted pose
   }
   function freeExit() {
-    FREE.on = false; FREE.hasBox = false; medBox.visible = false; hideCard();
+    FREE.on = false; FREE.zone = null; FREE.hasBox = false; medBox.visible = false; hideCard();
     jumpBlend = 1;
   }
   function freeGoTo(x, z, next) {
-    FREE.target = V3(THREE.MathUtils.clamp(x, BOUND.x0, BOUND.x1), 0, THREE.MathUtils.clamp(z, BOUND.z0, BOUND.z1));
+    const bd = Z().bound;
+    FREE.target = V3(THREE.MathUtils.clamp(x, bd.x0, bd.x1), 0, THREE.MathUtils.clamp(z, bd.z0, bd.z1));
     FREE.next = next; FREE.mode = 'walk'; FREE.t = 0;
   }
   // a point on screen → a point on the plane z = const, in the scene
@@ -925,7 +958,7 @@ async function boot() {
     const r = canvas.getBoundingClientRect();
     if (!r.width) return null;
     _nd2.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
-    _rc.setFromCamera(_nd2, camH);
+    _rc.setFromCamera(_nd2, (ZONES[frame] || ZONES.H).cam);
     _plz.constant = -z;
     const out = new THREE.Vector3();
     return _rc.ray.intersectPlane(_plz, out) ? out : null;
@@ -933,15 +966,17 @@ async function boot() {
   // a tap on the shelves: walk there, reach up, take the medicine kept there
   function shelfTap(cx, cy) {
     if (!freeAllowed() && !FREE.on) return false;
-    const p = onPlaneZ(cx, cy, SHELF_Z);
-    if (!p || p.x < WIN.x0 - 0.3 || p.x > WIN.x1 + 0.3 || p.y < 0.9 || p.y > 2.5) return false;
+    const zn = ZONES[frame]; if (!zn) return false;
+    const p = onPlaneZ(cx, cy, zn.shelfZ);
+    if (!p || p.x < zn.win.x0 - 0.3 || p.x > zn.win.x1 + 0.3 || p.y < 0.9 || p.y > 2.5) return false;
     freeEnter();
     if (FREE.mode === 'carried' || FREE.mode === 'fall') return true;
+    if (FREE.mode === 'sit' || FREE.mode === 'typing') { FREE.mode = 'stand'; FREE.t = 0; }   // at his desk: gets up first
     hideCard(); FREE.hasBox = false; medBox.visible = false;
-    const col = THREE.MathUtils.clamp(Math.floor((p.x - WIN.x0) / (WIN.x1 - WIN.x0) * 4), 0, 3);
+    const col = THREE.MathUtils.clamp(Math.floor((p.x - zn.win.x0) / (zn.win.x1 - zn.win.x0) * 4), 0, 3);
     FREE.med = col + (p.y < 1.65 ? 4 : 0);
-    FREE.reachP = V3(THREE.MathUtils.clamp(p.x, BOUND.x0, BOUND.x1), THREE.MathUtils.clamp(p.y, 1.15, 2.0), SHELF_Z + 0.05);
-    const go = () => freeGoTo(p.x, SHELF_Z + 0.62, 'reach');
+    FREE.reachP = V3(THREE.MathUtils.clamp(p.x, zn.bound.x0, zn.bound.x1), THREE.MathUtils.clamp(p.y, 1.15, 2.0), zn.shelfZ + 0.05);
+    const go = () => freeGoTo(p.x, zn.shelfZ + 0.62, 'reach');
     if (FREE.mode === 'stand') FREE.after = go; else go();
     return true;
   }
@@ -978,12 +1013,15 @@ async function boot() {
         F.v += THREE.MathUtils.clamp(vmax - F.v, -2.6 * dt, 1.6 * dt);
         const step = Math.min(Math.max(0, F.v) * dt, dist);
         F.pos.x += Math.sin(F.yaw) * step; F.pos.z += Math.cos(F.yaw) * step;
-        F.pos.x = THREE.MathUtils.clamp(F.pos.x, BOUND.x0, BOUND.x1); F.pos.z = THREE.MathUtils.clamp(F.pos.z, BOUND.z0, BOUND.z1);
+        const bd = Z().bound;
+        F.pos.x = THREE.MathUtils.clamp(F.pos.x, bd.x0, bd.x1); F.pos.z = THREE.MathUtils.clamp(F.pos.z, bd.z0, bd.z1);
         F.phase += step / walkStride * walkDur;
         wWalk = ssF(F.v, 0.03, 0.4); wIdle = 1 - wWalk;
         if (dist < 0.05 && F.v < 0.15) {
           F.v = 0;
-          if (F.next === 'reach') { F.mode = 'reach'; F.t = 0; F.yawT = Math.PI; } else { F.mode = 'idle'; F.yawT = 0; }
+          if (F.next === 'reach') { F.mode = 'reach'; F.t = 0; F.yawT = Math.PI; }
+          else if (F.next === 'sit') { F.mode = 'sit'; F.t = 0; F.yawT = 0; }
+          else { F.mode = 'idle'; F.yawT = 0; }
         }
         P.copy(F.pos);
         break;
@@ -993,16 +1031,21 @@ async function boot() {
         F.yawT = F.t > 1.75 ? 0 : Math.PI;
         yawStep(7, 4.5);
         F.reachT = F.t > 0.45 ? F.t - 0.45 : 0;
-        if (!back && F.reachT > 0.6 && !F.hasBox) { F.hasBox = true; medMat.color.setHex(MEDS[F.med].col); }
+        if (!back && F.reachT > 0.6 && !F.hasBox) { F.hasBox = true; medMat.color.setHex(Z().meds[F.med].col); }
         if (back && F.reachT > 0.6 && F.hasBox) F.hasBox = false;
-        if (F.t > 2.4) { F.mode = back ? 'idle' : 'show'; F.t = 0; F.yawT = 0; if (!back) showCard(F.med); else hideCard(); }
+        if (F.t > 2.4) {
+          F.mode = back ? 'idle' : 'show'; F.t = 0; F.yawT = 0;
+          if (!back) showCard(F.med); else hideCard();
+          const home = Z().home;                             // NURF: back to his place at the counter, and sits
+          if (back && home) freeGoTo(home.x, home.z, 'sit');
+        }
         P.copy(F.pos);
         break;
       }
       case 'carried': {                                  // follows the finger on a spring: he lags and swings
         const p = grab.on ? onPlaneZ(grab.x, grab.y, F.pos.z) : null;
         if (p) {
-          const tx = THREE.MathUtils.clamp(p.x - F.carryOff.x, BOUND.x0, BOUND.x1);
+          const tx = THREE.MathUtils.clamp(p.x - F.carryOff.x, Z().bound.x0, Z().bound.x1);
           const ty = THREE.MathUtils.clamp(p.y - F.carryOff.y, 0, 0.45);
           const k = 140, c = 2 * 0.5 * Math.sqrt(k);
           F.vel.x += (k * (tx - F.pos.x) - c * F.vel.x) * dt;
@@ -1017,8 +1060,9 @@ async function boot() {
         F.vel.y -= 9.81 * dt;
         F.vel.x *= Math.exp(-dt * 0.4);
         F.pos.addScaledVector(F.vel, dt);
-        if (F.pos.x < BOUND.x0) { F.pos.x = BOUND.x0; F.vel.x *= -0.35; }
-        if (F.pos.x > BOUND.x1) { F.pos.x = BOUND.x1; F.vel.x *= -0.35; }
+        const bd = Z().bound;
+        if (F.pos.x < bd.x0) { F.pos.x = bd.x0; F.vel.x *= -0.35; }
+        if (F.pos.x > bd.x1) { F.pos.x = bd.x1; F.vel.x *= -0.35; }
         if (F.pos.y <= 0 && F.vel.y < 0) {
           SP.sq.v -= Math.min(3.5, -F.vel.y * 0.9);       // squash on impact
           F.pos.y = 0; F.vel.set(0, 0, 0); F.mode = 'land'; F.t = 0;
@@ -1027,11 +1071,25 @@ async function boot() {
         P.copy(F.pos); P.y -= AIR_DROP;
         break;
       }
+      case 'sit': case 'typing': {                       // sits down at the counter, then works at the laptop
+        yawStep(5, 3.5);
+        const tt = F.mode === 'sit' ? Math.min(2.23, F.t) : 2.23;
+        const w = F.mode === 'sit' ? 1 - ssF(F.t, 1.9, 2.4) : 0;
+        setAct('standToSit', tt, w);
+        setAct('typing', typeClock(dt), 1 - w); wIdle = 0;
+        P.copy(F.pos); P.z += rootAt('standToSit', tt)[1];
+        if (F.mode === 'sit' && F.t > 2.4) { F.mode = 'typing'; F.t = 0; }
+        break;
+      }
       case 'land': {                                     // knees take the impact, he rises
         const tt = 0.36 + F.t * 1.15;
         const w = 1 - ssF(tt, 1.25, 1.5);
         setAct('land', Math.min(tt, 1.5), w); wIdle = 1 - w;
-        if (tt >= 1.5) { F.mode = 'idle'; F.yawT = 0; }
+        if (tt >= 1.5) {
+          F.mode = 'idle'; F.yawT = 0;
+          const home = Z().home;                             // NURF: dusts himself off and goes back to work
+          if (home) freeGoTo(home.x, home.z, 'sit');
+        }
         P.copy(F.pos);
         break;
       }
@@ -1073,7 +1131,7 @@ async function boot() {
       medBox.quaternion.copy(rig.getWorldQuaternion(new THREE.Quaternion()));
     }
     // the hint shows while he's inside and nobody has played yet
-    hint.classList.toggle('on', !FREE.used && freeAllowed());
+    hint.classList.toggle('on', !(FREE.used && FREE.used[frame]) && freeAllowed());
   }
 
   let frontOn = null;
@@ -1117,7 +1175,7 @@ async function boot() {
       return;
     }
     // inside the pharmacy: a tap on the shelves (decided on release), no spinning
-    if (frame === 'H' && S3D.inside > 0.5) { Object.assign(tap, { on: true, id: e.pointerId, x: e.clientX, y: e.clientY, t: now() }); return; }
+    if ((frame === 'H' && S3D.inside > 0.5) || (frame === 'D' && S3D.wType > 0.5)) { Object.assign(tap, { on: true, id: e.pointerId, x: e.clientX, y: e.clientY, t: now() }); return; }
     Object.assign(spin, { drag: true, id: e.pointerId, lastX: e.clientX, lastT: now(), v: 0, target: spin.a });
     document.documentElement.classList.add('spinning');
   });
@@ -1215,7 +1273,7 @@ async function boot() {
     B.head.getWorldPosition(_h0); _h0.y += 0.12;
     B.hips.getWorldPosition(_h1);
     _h2.copy(_h1); _h2.y = rig.position.y + 0.05;
-    if (frame === 'H' && rig.position.z < WALL_Z) _h2.y = Math.max(_h2.y, 1.0);   // inside: the counter hides his legs
+    if ((frame === 'H' && rig.position.z < WALL_Z) || (frame === 'D' && rig.position.z < -5.75)) _h2.y = Math.max(_h2.y, 1.0);   // inside: the counter hides his legs
     const a = toPx(_h0), b = toPx(_h2), m = toPx(_h1);
     const side = toPx(_h1.clone().add(new THREE.Vector3(0.24, 0, 0)));
     const r = Math.hypot(side[0] - m[0], side[1] - m[1]);
